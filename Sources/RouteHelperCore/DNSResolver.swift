@@ -22,7 +22,7 @@ public enum ResolveError: Error, Equatable, Sendable, CustomStringConvertible {
 
 public enum DNSResolver {
     /// 物理网络 DNS 不可达时（例如非 root 进程受“本地网络”隐私限制）经由物理网卡使用的公共 DNS
-    public static let fallbackServers = ["223.5.5.5", "119.29.29.29", "8.8.8.8"]
+    public static let fallbackServers = ["1.1.1.1", "8.8.8.8", "9.9.9.9"]
 
     /// 按模式解析域名的 IPv4 地址，并过滤不可路由 / Fake-IP 结果
     public static func resolve(_ domain: String, mode: DNSMode, customServers: [String], physical: NetworkInterfaceInfo?) -> Result<[String], ResolveError> {

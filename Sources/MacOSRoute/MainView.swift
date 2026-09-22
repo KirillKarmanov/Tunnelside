@@ -89,8 +89,7 @@ struct HelperBanner: View {
     }
 
     private var helperIcon: some View {
-        Image("HelperIcon")
-            .resizable()
+        HelperIconImage()
             .frame(width: 28, height: 28)
     }
 

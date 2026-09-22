@@ -1,3 +1,4 @@
+import CryptoKit
 import Darwin
 import Foundation
 import RouteHelperCore
@@ -56,7 +57,11 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
             return false
         }
         if requireSignedClient {
-            connection.setCodeSigningRequirement(Self.clientRequirement)
+            guard let requirement = Self.clientRequirement else {
+                FileHandle.standardError.write(Data("Отказ: служба собрана без сертификата, проверить клиента нечем\n".utf8))
+                return false
+            }
+            connection.setCodeSigningRequirement(requirement)
         }
         connection.exportedInterface = NSXPCInterface(with: RouteHelperProtocol.self)
         connection.exportedObject = service
@@ -64,17 +69,27 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
         return true
     }
 
-    /// 客户端必须是 MacOSRoute App；Helper 本身由开发者证书签名时，还要求客户端属于同一 Team，
-    /// 防止任意程序通过 ad-hoc 签名伪造 Bundle ID 来控制 root 服务
-    static let clientRequirement: String = {
-        var requirement = "identifier \"\(RouteConstants.appBundleID)\""
-        if let team = ownTeamIdentifier() {
-            requirement += " and anchor apple generic and certificate leaf[subject.OU] = \"\(team)\""
+    /// Клиент обязан быть приложением MacOSRoute, подписанным тем же сертификатом, что и эта служба.
+    /// Сертификат Apple Developer → проверка по Team ID; собственный (самоподписанный) сертификат →
+    /// проверка по SHA-1 листового сертификата. Одного bundle ID мало: его подделает любая
+    /// программа через `codesign -s - --identifier …`. Служба без сертификата (ad-hoc)
+    /// возвращает nil и отказывает всем клиентам.
+    static let clientRequirement: String? = {
+        let identifier = "identifier \"\(RouteConstants.appBundleID)\""
+        let info = ownSigningInformation()
+        if let team = info?[kSecCodeInfoTeamIdentifier as String] as? String {
+            return identifier + " and anchor apple generic and certificate leaf[subject.OU] = \"\(team)\""
         }
-        return requirement
+        if let certificates = info?[kSecCodeInfoCertificates as String] as? [SecCertificate],
+           let leaf = certificates.first {
+            let der = SecCertificateCopyData(leaf) as Data
+            let sha1 = Insecure.SHA1.hash(data: der).map { String(format: "%02X", $0) }.joined()
+            return identifier + " and certificate leaf = H\"\(sha1)\""
+        }
+        return nil
     }()
 
-    private static func ownTeamIdentifier() -> String? {
+    private static func ownSigningInformation() -> [String: Any]? {
         var code: SecCode?
         var staticCode: SecStaticCode?
         var info: CFDictionary?
@@ -82,7 +97,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
               SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode,
               SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess
         else { return nil }
-        return (info as? [String: Any])?[kSecCodeInfoTeamIdentifier as String] as? String
+        return info as? [String: Any]
     }
 
     private func isAdministrator(uid: uid_t) -> Bool {
@@ -108,7 +123,11 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
 let arguments = CommandLine.arguments
 
 if arguments.contains("--print-client-requirement") {
-    print(ListenerDelegate.clientRequirement)
+    guard let requirement = ListenerDelegate.clientRequirement else {
+        print("нет: служба не подписана сертификатом, клиенты будут отклоняться")
+        exit(1)
+    }
+    print(requirement)
     exit(0)
 }
 

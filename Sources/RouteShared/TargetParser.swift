@@ -16,6 +16,10 @@ public enum RouteTarget: Equatable, Sendable {
 }
 
 public enum TargetParser {
+    /// Самая широкая допустимая подсеть. Правила шире /8 (0.0.0.0/0, пары /1 и т.п.) уводили бы
+    /// мимо VPN почти весь интернет одной строкой — такое не принимает ни интерфейс, ни служба.
+    public static let minimumPrefix = 8
+
     public static func parse(_ raw: String) -> RouteTarget? {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
@@ -27,7 +31,7 @@ public enum TargetParser {
 
         if let slash = s.firstIndex(of: "/") {
             let addr = String(s[..<slash])
-            guard let prefix = Int(s[s.index(after: slash)...]), (0...32).contains(prefix),
+            guard let prefix = Int(s[s.index(after: slash)...]), (minimumPrefix...32).contains(prefix),
                   let value = ipv4Value(addr) else { return nil }
             if prefix == 32 { return .host(ipv4String(value)) }
             return .network(ipv4String(value & maskValue(prefix: prefix)), prefix: prefix)

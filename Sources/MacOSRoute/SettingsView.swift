@@ -38,7 +38,7 @@ struct SettingsView: View {
                     ForEach(DNSMode.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 if config.dnsMode == .custom {
-                    TextField("DNS 服务器（逗号分隔）", text: $customServersText, prompt: Text("223.5.5.5, 119.29.29.29"))
+                    TextField("DNS 服务器（逗号分隔）", text: $customServersText, prompt: Text("1.1.1.1, 8.8.8.8"))
                         .onSubmit(saveCustomServers)
                 }
                 Text(dnsModeHelp)
@@ -78,8 +78,7 @@ struct SettingsView: View {
 
             Section("后台服务") {
                 HStack(spacing: 12) {
-                    Image("HelperIcon")
-                        .resizable()
+                    HelperIconImage()
                         .frame(width: 48, height: 48)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("MacOSRoute 后台服务").font(.headline)

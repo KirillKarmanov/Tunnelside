@@ -1,10 +1,12 @@
 import Darwin
 @testable import RouteHelperCore
 import RouteShared
-import XCTest
+import Foundation
+import Testing
 
-final class TargetParserTests: XCTestCase {
-    func testHosts() {
+@Suite(.serialized)
+final class TargetParserTests {
+    @Test func testHosts() {
         XCTAssertEqual(TargetParser.parse("1.2.3.4"), .host("1.2.3.4"))
         XCTAssertEqual(TargetParser.parse(" 10.0.0.1 "), .host("10.0.0.1"))
         XCTAssertEqual(TargetParser.parse("8.8.8.8/32"), .host("8.8.8.8"))
@@ -12,25 +14,31 @@ final class TargetParserTests: XCTestCase {
         XCTAssertNil(TargetParser.parse("1.2.3"))
     }
 
-    func testNetworks() {
+    @Test func testNetworks() {
         XCTAssertEqual(TargetParser.parse("10.1.2.3/8"), .network("10.0.0.0", prefix: 8))
         XCTAssertEqual(TargetParser.parse("192.168.1.0/24"), .network("192.168.1.0", prefix: 24))
         XCTAssertNil(TargetParser.parse("10.0.0.0/33"))
+        // шире /8 нельзя: такие правила уводят мимо VPN почти весь трафик
+        XCTAssertNil(TargetParser.parse("0.0.0.0/0"))
+        XCTAssertNil(TargetParser.parse("0.0.0.0/1"))
+        XCTAssertNil(TargetParser.parse("128.0.0.0/1"))
+        XCTAssertNil(TargetParser.parse("10.0.0.0/7"))
+        XCTAssertEqual(TargetParser.parse("87.232.64.0/24"), .network("87.232.64.0", prefix: 24))
         XCTAssertEqual(TargetParser.netmask(prefix: 20), "255.255.240.0")
     }
 
-    func testDomains() {
+    @Test func testDomains() {
         XCTAssertEqual(TargetParser.parse("Example.COM"), .domain("example.com"))
         XCTAssertEqual(TargetParser.parse("https://api.example.com:8443/v1?x=1"), .domain("api.example.com"))
         XCTAssertNil(TargetParser.parse("bad domain"))
         XCTAssertNil(TargetParser.parse("-bad.com"))
     }
 
-    func testSplitInput() {
+    @Test func testSplitInput() {
         XCTAssertEqual(TargetParser.splitInput("a.com, 1.1.1.1\nb.com；c.com"), ["a.com", "1.1.1.1", "b.com", "c.com"])
     }
 
-    func testAddressHelpers() {
+    @Test func testAddressHelpers() {
         XCTAssertTrue(TargetParser.isFakeIP("198.18.0.5"))
         XCTAssertTrue(TargetParser.isFakeIP("198.19.255.1"))
         XCTAssertFalse(TargetParser.isFakeIP("198.20.0.1"))
@@ -40,7 +48,7 @@ final class TargetParserTests: XCTestCase {
         XCTAssertTrue(TargetParser.isUnroutableResolution("0.0.0.0"))
     }
 
-    func testConfigDecodesLegacyFormat() throws {
+    @Test func testConfigDecodesLegacyFormat() throws {
         let json = #"{"rules":[{"id":"11111111-1111-1111-1111-111111111111","target":"github.com","enabled":true,"note":""}],"interface":"auto","dnsRefreshMinutes":10}"#
         let config = try RouteJSON.decoder().decode(HelperConfig.self, from: Data(json.utf8))
         XCTAssertEqual(config.rules.first?.via, .physical)
@@ -50,8 +58,9 @@ final class TargetParserTests: XCTestCase {
     }
 }
 
-final class RouteToolTests: XCTestCase {
-    func testParseGetOutput() {
+@Suite(.serialized)
+final class RouteToolTests {
+    @Test func testParseGetOutput() {
         let output = """
            route to: 1.1.1.1
         destination: default
@@ -65,13 +74,14 @@ final class RouteToolTests: XCTestCase {
         XCTAssertEqual(info.destination, "default")
     }
 
-    func testAddArguments() {
+    @Test func testAddArguments() {
         XCTAssertEqual(RouteTool.addArguments("1.2.3.4", via: NextHop(gateway: "192.168.1.1", interface: "en0")), ["-n", "add", "-host", "1.2.3.4", "192.168.1.1"])
         XCTAssertEqual(RouteTool.addArguments("10.0.0.0/8", via: NextHop(gateway: nil, interface: "utun3")), ["-n", "add", "-net", "10.0.0.0/8", "-interface", "utun3"])
     }
 }
 
-final class RoutingTableTests: XCTestCase {
+@Suite(.serialized)
+final class RoutingTableTests {
     /// 构造一条 NET_RT_DUMP 消息
     private func message(flags: Int32, index: UInt16, sockaddrs: [(Int32, [UInt8])]) -> [UInt8] {
         var body: [UInt8] = []
@@ -96,7 +106,7 @@ final class RoutingTableTests: XCTestCase {
         [16, UInt8(AF_INET), 0, 0, a, b, c, d, 0, 0, 0, 0, 0, 0, 0, 0]
     }
 
-    func testParsesHostNetAndStaleRoutes() {
+    @Test func testParsesHostNetAndStaleRoutes() {
         let bytes = message(flags: RTF_UP | RTF_GATEWAY | RTF_HOST | RTF_STATIC, index: 4,
                             sockaddrs: [(RTAX_DST, sin(203, 0, 113, 22)), (RTAX_GATEWAY, sin(172, 20, 10, 1)), (RTAX_IFA, sin(172, 20, 10, 9))])
             + message(flags: RTF_UP | RTF_GATEWAY | RTF_STATIC, index: 4,
@@ -120,13 +130,14 @@ final class RoutingTableTests: XCTestCase {
         XCTAssertNil(RoutingTable.exactRoute(for: "0.0.0.0/0", in: entries), "scoped 路由不参与精确匹配")
     }
 
-    func testLiveDumpReturnsDefaultRoute() {
+    @Test func testLiveDumpReturnsDefaultRoute() {
         XCTAssertTrue(RoutingTable.dump().contains { $0.prefix == 0 }, "本机路由表应至少包含一条默认路由")
     }
 }
 
-final class DNSMessageTests: XCTestCase {
-    func testQueryAndCompressedResponse() throws {
+@Suite(.serialized)
+final class DNSMessageTests {
+    @Test func testQueryAndCompressedResponse() throws {
         let query = try XCTUnwrap(DNSMessage.query(id: 0x1234, name: "www.example.com"))
         XCTAssertEqual(query.count, 12 + 17 + 4)
 
@@ -145,13 +156,14 @@ final class DNSMessageTests: XCTestCase {
         XCTAssertEqual(DNSMessage.parseA(nx, expectedID: 0x1234), .failure(.notFound))
     }
 
-    func testFakeIPIsRejected() {
+    @Test func testFakeIPIsRejected() {
         XCTAssertEqual(DNSResolver.filter(["198.18.0.7"]), .failure(.fakeIP(["198.18.0.7"])))
         XCTAssertEqual(DNSResolver.filter(["198.18.0.7", "1.2.3.4"]), .success(["1.2.3.4"]))
     }
 }
 
-final class GatewayDetectorTests: XCTestCase {
+@Suite(.serialized)
+final class GatewayDetectorTests {
     let entries: [GatewayDetector.ServiceEntry] = [
         .init(serviceID: "vpn", ipv4: ["InterfaceName": "utun19", "Router": "100.100.10.53", "Addresses": ["100.100.10.53"]]),
         .init(serviceID: "feth", ipv4: ["InterfaceName": "feth1234", "Router": "127.0.0.1", "Addresses": ["10.99.0.91"]]),
@@ -160,7 +172,7 @@ final class GatewayDetectorTests: XCTestCase {
         .init(serviceID: "eth", ipv4: ["InterfaceName": "en7", "Router": "10.0.0.1", "Addresses": ["10.0.0.5"]]),
     ]
 
-    func testSkipsTunnelsAndUsesServiceOrder() {
+    @Test func testSkipsTunnelsAndUsesServiceOrder() {
         XCTAssertEqual(GatewayDetector.choose(entries: entries, serviceOrder: ["vpn", "eth", "wifi"], preferredInterface: "auto").physical?.router, "10.0.0.1")
         let snapshot = GatewayDetector.choose(entries: entries, serviceOrder: ["vpn", "wifi", "eth"], preferredInterface: "auto")
         XCTAssertEqual(snapshot.physical?.interface, "en0")
@@ -169,7 +181,7 @@ final class GatewayDetectorTests: XCTestCase {
         XCTAssertEqual(snapshot.interfaces.first { $0.name == "utun19" }?.isVirtual, true)
     }
 
-    func testPreferredInterface() {
+    @Test func testPreferredInterface() {
         XCTAssertEqual(GatewayDetector.choose(entries: entries, serviceOrder: [], preferredInterface: "en0").physical?.router, "192.168.1.1")
         XCTAssertNil(GatewayDetector.choose(entries: entries, serviceOrder: [], preferredInterface: "en9").physical)
     }
@@ -227,7 +239,8 @@ final class Clock: @unchecked Sendable {
     var date = Date(timeIntervalSince1970: 1_800_000_000)
 }
 
-final class RouteEngineTests: XCTestCase {
+@Suite(.serialized)
+final class RouteEngineTests {
     static let vpn = NetworkInterfaceInfo(name: "utun19", router: nil, localAddress: "100.100.10.53", subnetMask: nil, dnsServers: [], isVirtual: true)
     static let wifi = GatewayDetector.Snapshot(
         physical: GatewayInfo(interface: "en0", router: "192.168.1.1", localAddress: "192.168.1.27"),
@@ -241,13 +254,13 @@ final class RouteEngineTests: XCTestCase {
     var system: FakeSystem!
     var clock: Clock!
 
-    override func setUp() {
+    init() {
         storage = FileManager.default.temporaryDirectory.appendingPathComponent("MacOSRouteTests-\(UUID().uuidString)")
         system = FakeSystem(network: Self.wifi)
         clock = Clock()
     }
 
-    override func tearDown() {
+    deinit {
         try? FileManager.default.removeItem(at: storage)
     }
 
@@ -270,7 +283,7 @@ final class RouteEngineTests: XCTestCase {
         engine.currentState().statuses[rule.id.uuidString]
     }
 
-    func testAppliesHostNetworkAndDomainRules() {
+    @Test func testAppliesHostNetworkAndDomainRules() {
         system.dnsAnswers["example.com"] = .success(["93.184.216.34", "93.184.216.35"])
         let engine = makeEngine()
         let rules = [RouteRule(target: "1.2.3.4"), RouteRule(target: "10.0.0.0/8"), RouteRule(target: "example.com")]
@@ -283,7 +296,21 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertEqual(engine.currentState().managedRoutes.count, 4)
     }
 
-    func testWiFiSwitchReplacesRoutesUsingDeleteAndAdd() {
+    @Test func testRejectsRulesWiderThanMinimumPrefix() {
+        // конфиг мог прийти в службу в обход интерфейса — широкие правила всё равно не применяются
+        let engine = makeEngine()
+        let tableBefore = system.table.count
+        let rules = [RouteRule(target: "0.0.0.0/1"), RouteRule(target: "128.0.0.0/1"), RouteRule(target: "0.0.0.0/0")]
+        update(engine) { $0.rules = rules }
+
+        XCTAssertEqual(system.table.count, tableBefore)
+        XCTAssertNil(system.table["0.0.0.0/1"])
+        XCTAssertNil(system.table["128.0.0.0/1"])
+        XCTAssertEqual(engine.currentState().managedRoutes.count, 0)
+        XCTAssertNotNil(status(engine, rules[0])?.error)
+    }
+
+    @Test func testWiFiSwitchReplacesRoutesUsingDeleteAndAdd() {
         system.network = Self.hotspot
         let engine = makeEngine()
         let rule = RouteRule(target: "203.0.113.22")
@@ -300,7 +327,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertEqual(status(engine, rule)?.appliedAddresses, ["203.0.113.22"])
     }
 
-    func testFixesRouteWithStaleSourceAddress() {
+    @Test func testFixesRouteWithStaleSourceAddress() {
         let engine = makeEngine()
         // 网关相同但仍绑定旧网络的源地址（route change 后常见）
         var stale = FakeSystem.entry("1.2.3.4", gateway: "192.168.1.1", network: Self.wifi)
@@ -310,7 +337,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertEqual(system.table["1.2.3.4"]?.interfaceAddress, "192.168.1.27")
     }
 
-    func testKeepsRoutesWhileOffline() {
+    @Test func testKeepsRoutesWhileOffline() {
         let engine = makeEngine()
         let rule = RouteRule(target: "1.2.3.4")
         update(engine) { $0.rules = [rule] }
@@ -325,7 +352,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertEqual(system.table["1.2.3.4"]?.gateway, "172.20.10.1")
     }
 
-    func testRepairsRouteRemovedByAnotherProgram() {
+    @Test func testRepairsRouteRemovedByAnotherProgram() {
         let engine = makeEngine()
         update(engine) { $0.rules = [RouteRule(target: "1.2.3.4")] }
         system.table["1.2.3.4"] = nil // 例如 VPN 连接时清理了路由
@@ -333,7 +360,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertEqual(system.table["1.2.3.4"]?.gateway, "192.168.1.1")
     }
 
-    func testRemovingRuleOnlyDeletesRoutesWeStillOwn() {
+    @Test func testRemovingRuleOnlyDeletesRoutesWeStillOwn() {
         let engine = makeEngine()
         let a = RouteRule(target: "1.2.3.4"), b = RouteRule(target: "5.6.7.8")
         update(engine) { $0.rules = [a, b] }
@@ -346,7 +373,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertTrue(engine.currentState().managedRoutes.isEmpty)
     }
 
-    func testRestoresReplacedStaticRoute() {
+    @Test func testRestoresReplacedStaticRoute() {
         system.table["1.2.3.4"] = FakeSystem.entry("1.2.3.4", gateway: "192.168.1.254", network: Self.wifi)
         let engine = makeEngine()
         update(engine) { $0.rules = [RouteRule(target: "1.2.3.4")] }
@@ -356,7 +383,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertEqual(system.table["1.2.3.4"]?.gateway, "192.168.1.254", "删除规则后应恢复原有路由")
     }
 
-    func testAdoptedIdenticalRouteIsKeptAfterRuleRemoval() {
+    @Test func testAdoptedIdenticalRouteIsKeptAfterRuleRemoval() {
         // 例如 VPN 客户端自己的 100.64.0.0/10 → utun19
         system.table["100.64.0.0/10"] = FakeSystem.entry("100.64.0.0/10", gateway: nil, network: Self.wifi, interface: "utun19")
         let engine = makeEngine()
@@ -367,7 +394,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNotNil(system.table["100.64.0.0/10"], "删除规则不应删除原本就存在的路由")
     }
 
-    func testAdoptedRouteBecomesOwnedAfterReplacement() {
+    @Test func testAdoptedRouteBecomesOwnedAfterReplacement() {
         system.table["1.2.3.4"] = FakeSystem.entry("1.2.3.4", gateway: "192.168.1.1", network: Self.wifi)
         let engine = makeEngine()
         update(engine) { $0.rules = [RouteRule(target: "1.2.3.4")] }
@@ -379,7 +406,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNil(system.table["1.2.3.4"], "网络切换后重建的路由归我们所有，删除规则时清理")
     }
 
-    func testStaleRouteIsNotRestored() {
+    @Test func testStaleRouteIsNotRestored() {
         // 在热点网络下留下的失效路由
         system.table["203.0.113.22"] = FakeSystem.entry("203.0.113.22", gateway: "172.20.10.1", network: Self.hotspot)
         let engine = makeEngine()
@@ -390,7 +417,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNil(system.table["203.0.113.22"], "失效路由不应被恢复")
     }
 
-    func testFailedAddIsNotRecordedAndIsRetried() {
+    @Test func testFailedAddIsNotRecordedAndIsRetried() {
         system.failAdd = ["1.2.3.4"]
         let engine = makeEngine()
         let rule = RouteRule(target: "1.2.3.4")
@@ -404,7 +431,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNil(status(engine, rule)?.error)
     }
 
-    func testDNSFailureKeepsLastResult() {
+    @Test func testDNSFailureKeepsLastResult() {
         system.dnsAnswers["example.com"] = .success(["93.184.216.34"])
         let engine = makeEngine()
         let rule = RouteRule(target: "example.com")
@@ -417,7 +444,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNotNil(status(engine, rule)?.warning)
     }
 
-    func testChangedDNSAnswersAreRetainedThenPruned() {
+    @Test func testChangedDNSAnswersAreRetainedThenPruned() {
         system.dnsAnswers["cdn.example.com"] = .success(["1.1.1.1"])
         let engine = makeEngine()
         let rule = RouteRule(target: "cdn.example.com")
@@ -436,7 +463,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNotNil(system.table["2.2.2.2"])
     }
 
-    func testRevisionConflictIsRejected() {
+    @Test func testRevisionConflictIsRejected() {
         let engine = makeEngine()
         let stale = engine.currentState().config
         XCTAssertTrue(update(engine) { $0.rules = [RouteRule(target: "1.2.3.4")] })
@@ -450,7 +477,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertEqual(engine.currentState().config.rules.map(\.target), ["1.2.3.4"])
     }
 
-    func testPauseAndResume() {
+    @Test func testPauseAndResume() {
         let engine = makeEngine()
         update(engine) { $0.rules = [RouteRule(target: "1.2.3.4")] }
         update(engine) { $0.paused = true }
@@ -459,7 +486,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNotNil(system.table["1.2.3.4"])
     }
 
-    func testRecordsSurviveRestart() {
+    @Test func testRecordsSurviveRestart() {
         let rule = RouteRule(target: "1.2.3.4")
         update(makeEngine()) { $0.rules = [rule] }
 
@@ -469,7 +496,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNil(system.table["1.2.3.4"], "重启后仍能清理之前添加的路由")
     }
 
-    func testConflictingNextHopsPreferEarlierRule() {
+    @Test func testConflictingNextHopsPreferEarlierRule() {
         let engine = makeEngine()
         let first = RouteRule(target: "1.2.3.4")
         let second = RouteRule(target: "1.2.3.4/32", via: .interface("utun19"))
@@ -478,7 +505,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNotNil(status(engine, second)?.warning)
     }
 
-    func testInterfaceAndGatewayVia() {
+    @Test func testInterfaceAndGatewayVia() {
         let engine = makeEngine()
         update(engine) {
             $0.rules = [RouteRule(target: "100.64.0.0/10", via: .interface("utun19")),
@@ -491,7 +518,7 @@ final class RouteEngineTests: XCTestCase {
         XCTAssertNil(system.table["9.9.9.9"], "网关不在当前网络中时不添加")
     }
 
-    func testDeleteSystemRoutesRefusesManagedRoutes() {
+    @Test func testDeleteSystemRoutesRefusesManagedRoutes() {
         system.table["203.0.113.22"] = FakeSystem.entry("203.0.113.22", gateway: "172.20.10.1", network: Self.hotspot)
         let engine = makeEngine()
         update(engine) { $0.rules = [RouteRule(target: "1.2.3.4")] }
