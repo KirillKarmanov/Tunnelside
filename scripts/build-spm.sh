@@ -4,6 +4,7 @@
 #
 #   scripts/build-spm.sh                    # подпись сертификатом «MacOSRoute Local Signing»
 #   SIGN_IDENTITY="Apple Development: …" scripts/build-spm.sh
+#   CONFIG=debug APP=/tmp/x/MacOSRoute.app scripts/build-spm.sh   # отладочная сборка (нужна для скриншотов)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -13,12 +14,13 @@ HELPER_ID="$APP_ID.helper"
 VERSION="1.0.1"
 BUILD_NUMBER="4"
 MIN_MACOS="14.0"
-APP="build/MacOSRoute.app"
+CONFIG="${CONFIG:-release}"
+APP="${APP:-build/MacOSRoute.app}"
 
-echo "→ Компиляция"
-swift build -c release --product MacOSRoute
-swift build -c release --product MacOSRouteHelper
-BIN="$(swift build -c release --show-bin-path)"
+echo "→ Компиляция ($CONFIG)"
+swift build -c "$CONFIG" --product MacOSRoute
+swift build -c "$CONFIG" --product MacOSRouteHelper
+BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 
 echo "→ Упаковка $APP"
 rm -rf "$APP"
