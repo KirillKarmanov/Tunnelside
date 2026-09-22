@@ -8,7 +8,7 @@ struct RuleRow: Identifiable {
     var paused: Bool
     var id: UUID { rule.id }
 
-    var kind: String { TargetParser.parse(rule.target)?.kindLabel ?? "无效" }
+    var kind: String { TargetParser.parse(rule.target)?.kindLabel ?? "Некорректно" }
     var addressesText: String { status?.addresses.joined(separator: ", ") ?? "" }
 
     enum Health { case ok, warning, partial, error, pending, disabled }
@@ -25,21 +25,21 @@ struct RuleRow: Identifiable {
 
     var statusText: String {
         switch health {
-        case .disabled: return paused ? "已暂停" : "已停用"
-        case .pending: return status?.error ?? "等待中"
-        case .ok: return "已生效"
-        case .warning: return status?.warning ?? status?.error ?? "已生效"
-        case .partial: return status?.error ?? "部分生效 \(status?.appliedAddresses.count ?? 0)/\(status?.addresses.count ?? 0)"
-        case .error: return status?.error ?? "未生效"
+        case .disabled: return paused ? "На паузе" : "Выключено"
+        case .pending: return status?.error ?? "Ожидание"
+        case .ok: return "Работает"
+        case .warning: return status?.warning ?? status?.error ?? "Работает"
+        case .partial: return status?.error ?? "Работает частично \(status?.appliedAddresses.count ?? 0)/\(status?.addresses.count ?? 0)"
+        case .error: return status?.error ?? "Не работает"
         }
     }
 
     var detailText: String {
         var lines = [statusText]
-        if let hop = status?.nextHop { lines.append("下一跳：\(hop)") }
-        if let status, !status.addresses.isEmpty { lines.append("地址：\(status.addresses.joined(separator: ", "))") }
-        if let retained = status?.retainedAddresses, !retained.isEmpty { lines.append("保留的旧解析结果：\(retained.joined(separator: ", "))") }
-        if let date = status?.resolvedAt { lines.append("解析于 \(date.formatted(date: .omitted, time: .standard))") }
+        if let hop = status?.nextHop { lines.append("Следующий узел: \(hop)") }
+        if let status, !status.addresses.isEmpty { lines.append("Адреса: \(status.addresses.joined(separator: ", "))") }
+        if let retained = status?.retainedAddresses, !retained.isEmpty { lines.append("Удерживаются старые адреса домена: \(retained.joined(separator: ", "))") }
+        if let date = status?.resolvedAt { lines.append("Адреса получены в \(date.formatted(date: .omitted, time: .standard))") }
         return lines.joined(separator: "\n")
     }
 }
@@ -88,7 +88,7 @@ struct RulesView: View {
             filterBar
             table
         }
-        .searchable(text: $search, prompt: "搜索目标、备注或分组")
+        .searchable(text: $search, prompt: "Поиск по адресу, заметке или группе")
         .sheet(item: $editingRule) { rule in
             RuleEditor(rule: rule, groups: client.groups, interfaces: client.state?.interfaces ?? []) { client.updateRule($0) }
         }
@@ -104,22 +104,22 @@ struct RulesView: View {
         }
     }
 
-    // MARK: 添加
+    // MARK: Добавление
 
     private var addBar: some View {
         HStack(spacing: 8) {
-            TextField("IP、网段（CIDR）或域名，可一次输入多个", text: $input)
+            TextField("IP, подсеть (CIDR) или домен — можно несколько сразу", text: $input)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(add)
             ViaMenu(via: $newVia, interfaces: client.state?.interfaces ?? [])
                 .frame(width: 150)
             GroupField(text: $newGroup, groups: client.groups)
                 .frame(width: 120)
-            TextField("备注", text: $note)
+            TextField("Заметка", text: $note)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 120)
                 .onSubmit(add)
-            Button("添加", action: add)
+            Button("Добавить", action: add)
                 .keyboardShortcut(.return, modifiers: .command)
                 .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || !client.canModify)
         }
@@ -135,17 +135,17 @@ struct RulesView: View {
             note = ""
         } else {
             input = invalid.joined(separator: " ")
-            client.alertMessage = "无法识别：\(invalid.joined(separator: ", "))"
+            client.alertMessage = "Не распознано (или подсеть шире /8): \(invalid.joined(separator: ", "))"
         }
     }
 
-    // MARK: 过滤
+    // MARK: Фильтр
 
     private var filterBar: some View {
         HStack(spacing: 10) {
-            Picker("分组", selection: $groupFilter) {
-                Text("全部分组").tag(GroupFilter.all)
-                Text("未分组").tag(GroupFilter.ungrouped)
+            Picker("Группа", selection: $groupFilter) {
+                Text("Все группы").tag(GroupFilter.all)
+                Text("Без группы").tag(GroupFilter.ungrouped)
                 if !client.groups.isEmpty { Divider() }
                 ForEach(client.groups, id: \.self) { Text($0).tag(GroupFilter.group($0)) }
             }
@@ -153,14 +153,14 @@ struct RulesView: View {
             .frame(maxWidth: 220)
 
             if case .group(let group) = groupFilter {
-                Button("启用本组") { client.setGroupEnabled(group, enabled: true) }
-                Button("停用本组") { client.setGroupEnabled(group, enabled: false) }
-                Button("重命名…") { groupPrompt = GroupPrompt(kind: .rename(group), text: group) }
+                Button("Включить группу") { client.setGroupEnabled(group, enabled: true) }
+                Button("Выключить группу") { client.setGroupEnabled(group, enabled: false) }
+                Button("Переименовать…") { groupPrompt = GroupPrompt(kind: .rename(group), text: group) }
             }
             Spacer()
             let all = client.rules.filter(\.enabled)
             let ok = all.filter { RuleRow(rule: $0, status: client.status(for: $0), paused: client.isPaused).health == .ok }.count
-            Text("共 \(client.rules.count) 条 · 启用 \(all.count) · 完全生效 \(ok)")
+            Text("Всего: \(client.rules.count) · включено: \(all.count) · работают полностью: \(ok)")
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
         }
@@ -172,18 +172,18 @@ struct RulesView: View {
         }
     }
 
-    // MARK: 表格
+    // MARK: Таблица
 
     private var table: some View {
         Table(rows, selection: $selection) {
-            TableColumn("启用") { row in
+            TableColumn("Вкл.") { row in
                 Toggle("", isOn: Binding(get: { row.rule.enabled }, set: { client.setEnabled($0, for: [row.id]) }))
                     .labelsHidden()
                     .disabled(!client.canModify)
             }
             .width(36)
 
-            TableColumn("目标") { row in
+            TableColumn("Адрес") { row in
                 VStack(alignment: .leading, spacing: 2) {
                     Text(row.rule.target).monospaced()
                     Text(row.kind).font(.caption).foregroundStyle(.secondary)
@@ -191,12 +191,12 @@ struct RulesView: View {
             }
             .width(min: 140, ideal: 190)
 
-            TableColumn("出口") { row in
+            TableColumn("Выход") { row in
                 Text(row.rule.via.label).foregroundStyle(row.rule.via == .physical ? .secondary : .primary)
             }
             .width(min: 80, ideal: 110)
 
-            TableColumn("地址") { row in
+            TableColumn("Адреса") { row in
                 Text(row.addressesText.isEmpty ? "—" : row.addressesText)
                     .monospaced()
                     .foregroundStyle(row.addressesText.isEmpty ? .secondary : .primary)
@@ -205,17 +205,17 @@ struct RulesView: View {
             }
             .width(min: 150, ideal: 240)
 
-            TableColumn("状态") { row in
+            TableColumn("Состояние") { row in
                 StatusBadge(row: row).help(row.detailText)
             }
             .width(min: 90, ideal: 160)
 
-            TableColumn("分组") { row in
+            TableColumn("Группа") { row in
                 Text(row.rule.group.isEmpty ? "—" : row.rule.group).foregroundStyle(.secondary)
             }
             .width(min: 50, ideal: 80)
 
-            TableColumn("备注") { row in
+            TableColumn("Заметка") { row in
                 Text(row.rule.note).foregroundStyle(.secondary)
             }
         }
@@ -229,8 +229,8 @@ struct RulesView: View {
             if client.rules.isEmpty && client.canModify {
                 VStack(spacing: 8) {
                     Image(systemName: "arrow.triangle.branch").font(.largeTitle).foregroundStyle(.secondary)
-                    Text("还没有规则").font(.headline)
-                    Text("添加的 IP / 网段 / 域名将始终经由指定出口访问，\n切换 Wi-Fi 或网络后会自动重新应用。")
+                    Text("Правил пока нет").font(.headline)
+                    Text("Добавленные IP / подсети / домены всегда идут через выбранный выход,\nпосле смены Wi‑Fi или сети правила применяются заново автоматически.")
                         .multilineTextAlignment(.center)
                         .foregroundStyle(.secondary)
                 }
@@ -241,35 +241,35 @@ struct RulesView: View {
     @ViewBuilder
     private func contextMenu(_ ids: Set<RouteRule.ID>) -> some View {
         let selected = client.rules.filter { ids.contains($0.id) }
-        Button("编辑…") { editingRule = selected.first }
+        Button("Изменить…") { editingRule = selected.first }
             .disabled(selected.count != 1)
         if let first = selected.first, selected.count == 1 {
-            Button("诊断「\(first.target)」") { navigation.diagnose(first.target) }
+            Button("Диагностика «\(first.target)»") { navigation.diagnose(first.target) }
         }
         Divider()
-        Button("启用") { client.setEnabled(true, for: ids) }
-        Button("停用") { client.setEnabled(false, for: ids) }
-        Menu("出口") {
-            Button("物理网关（自动）") { client.setVia(.physical, for: ids) }
+        Button("Включить") { client.setEnabled(true, for: ids) }
+        Button("Выключить") { client.setEnabled(false, for: ids) }
+        Menu("Выход") {
+            Button("Физический шлюз (автоматически)") { client.setVia(.physical, for: ids) }
             ForEach(client.state?.interfaces ?? [], id: \.name) { info in
                 Button(ViaMenu.label(for: info)) { client.setVia(.interface(info.name), for: ids) }
             }
         }
-        Menu("分组") {
+        Menu("Группа") {
             ForEach(client.groups, id: \.self) { group in
                 Button(group) { client.setGroup(group, for: ids) }
             }
             if !client.groups.isEmpty { Divider() }
-            Button("新建分组…") { groupPrompt = GroupPrompt(kind: .assign(ids), text: "") }
-            Button("移出分组") { client.setGroup("", for: ids) }
+            Button("Новая группа…") { groupPrompt = GroupPrompt(kind: .assign(ids), text: "") }
+            Button("Убрать из группы") { client.setGroup("", for: ids) }
         }
-        Menu("优先级") {
-            Button("移到最前") { client.moveRules(ids, toTop: true) }
-            Button("移到最后") { client.moveRules(ids, toTop: false) }
+        Menu("Приоритет") {
+            Button("В начало") { client.moveRules(ids, toTop: true) }
+            Button("В конец") { client.moveRules(ids, toTop: false) }
         }
-        Button("复制地址") { copyAddresses(ids) }
+        Button("Копировать адреса") { copyAddresses(ids) }
         Divider()
-        Button("删除", role: .destructive) { client.removeRules(ids) }
+        Button("Удалить", role: .destructive) { client.removeRules(ids) }
     }
 
     private func copyAddresses(_ ids: Set<RouteRule.ID>) {
@@ -313,7 +313,7 @@ struct StatusBadge: View {
     }
 }
 
-/// 出口选择菜单
+/// Меню выбора выхода
 struct ViaMenu: View {
     @Binding var via: RouteVia
     let interfaces: [NetworkInterfaceInfo]
@@ -321,56 +321,56 @@ struct ViaMenu: View {
     @State private var gatewayText = ""
 
     static func label(for info: NetworkInterfaceInfo) -> String {
-        if info.isVirtual { return "\(info.name)（VPN / 虚拟网卡）" }
-        return "\(info.name)（\(info.router ?? info.localAddress ?? "无网关")）"
+        if info.isVirtual { return "\(info.name) (VPN / виртуальный интерфейс)" }
+        return "\(info.name) (\(info.router ?? info.localAddress ?? "нет шлюза"))"
     }
 
     var body: some View {
         Menu {
-            Button("物理网关（自动）") { via = .physical }
+            Button("Физический шлюз (автоматически)") { via = .physical }
             if !interfaces.isEmpty {
-                Section("指定网卡") {
+                Section("Выбранный интерфейс") {
                     ForEach(interfaces, id: \.name) { info in
                         Button(Self.label(for: info)) { via = .interface(info.name) }
                     }
                 }
             }
             Divider()
-            Button("指定网关…") {
+            Button("Указать шлюз…") {
                 if case .gateway(let ip) = via { gatewayText = ip }
                 askGateway = true
             }
         } label: {
             Label(via.label, systemImage: via == .physical ? "wifi" : "arrow.turn.up.right")
         }
-        .help("物理网关：自动选择 Wi-Fi / 有线的网关（绕过 VPN）\n指定网卡：固定走某个网卡，可以是 VPN 隧道\n指定网关：固定使用某个网关 IP")
-        .alert("指定网关", isPresented: $askGateway) {
-            TextField("例如 192.168.1.254", text: $gatewayText)
-            Button("确定") {
+        .help("Физический шлюз: шлюз Wi‑Fi или проводной сети выбирается автоматически (мимо VPN)\nВыбранный интерфейс: всегда через конкретный интерфейс, можно и через VPN-туннель\nУказанный шлюз: всегда через шлюз с заданным IP")
+        .alert("Указать шлюз", isPresented: $askGateway) {
+            TextField("Например, 192.168.1.254", text: $gatewayText)
+            Button("ОК") {
                 let ip = gatewayText.trimmingCharacters(in: .whitespaces)
                 if TargetParser.ipv4Value(ip) != nil { via = .gateway(ip) }
             }
-            Button("取消", role: .cancel) {}
+            Button("Отмена", role: .cancel) {}
         } message: {
-            Text("网关必须位于某个已连接网络的子网内。")
+            Text("Шлюз должен находиться в подсети одной из подключённых сетей.")
         }
     }
 }
 
-/// 可输入也可选择已有分组
+/// Можно ввести новую группу или выбрать существующую
 struct GroupField: View {
     @Binding var text: String
     let groups: [String]
 
     var body: some View {
         HStack(spacing: 2) {
-            TextField("分组", text: $text)
+            TextField("Группа", text: $text)
                 .textFieldStyle(.roundedBorder)
             if !groups.isEmpty {
                 Menu {
                     ForEach(groups, id: \.self) { g in Button(g) { text = g } }
                     Divider()
-                    Button("不分组") { text = "" }
+                    Button("Без группы") { text = "" }
                 } label: {
                     Image(systemName: "chevron.down")
                 }
@@ -391,12 +391,12 @@ struct GroupNameSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(isRename ? "重命名分组" : "移动到新分组").font(.headline)
+            Text(isRename ? "Переименовать группу" : "Переместить в новую группу").font(.headline)
             GroupField(text: $name, groups: groups)
             HStack {
                 Spacer()
-                Button("取消") { dismiss() }
-                Button("确定") {
+                Button("Отмена") { dismiss() }
+                Button("ОК") {
                     onDone(name.trimmingCharacters(in: .whitespaces))
                     dismiss()
                 }
@@ -423,22 +423,22 @@ struct RuleEditor: View {
 
     var body: some View {
         Form {
-            TextField("目标", text: $rule.target)
+            TextField("Адрес", text: $rule.target)
             if TargetParser.parse(rule.target) == nil {
-                Text("无法识别的 IP / 网段 / 域名").foregroundStyle(.red).font(.caption)
+                Text("Не удалось распознать IP / подсеть / домен").foregroundStyle(.red).font(.caption)
             }
-            LabeledContent("出口") {
+            LabeledContent("Выход") {
                 ViaMenu(via: $rule.via, interfaces: interfaces).fixedSize()
             }
-            LabeledContent("分组") {
+            LabeledContent("Группа") {
                 GroupField(text: $rule.group, groups: groups)
             }
-            TextField("备注", text: $rule.note)
-            Toggle("启用", isOn: $rule.enabled)
+            TextField("Заметка", text: $rule.note)
+            Toggle("Включено", isOn: $rule.enabled)
             HStack {
                 Spacer()
-                Button("取消") { dismiss() }
-                Button("保存") {
+                Button("Отмена") { dismiss() }
+                Button("Сохранить") {
                     rule.target = rule.target.trimmingCharacters(in: .whitespaces)
                     onSave(rule)
                     dismiss()

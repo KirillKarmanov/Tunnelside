@@ -1,8 +1,8 @@
 import Foundation
 import RouteShared
 
-/// 对 /sbin/route 的封装。地址格式：主机为 "1.2.3.4"，网段为 "10.0.0.0/8"。
-/// 路由表的读取使用 RoutingTable（sysctl），这里只负责修改和单点查询。
+/// Обёртка над /sbin/route. Формат адреса: хост — "1.2.3.4", подсеть — "10.0.0.0/8".
+/// Таблица маршрутов читается через RoutingTable (sysctl), здесь — только изменения и точечные запросы.
 public enum RouteTool {
     public struct RouteInfo: Equatable, Sendable {
         public var destination: String?
@@ -37,7 +37,7 @@ public enum RouteTool {
         return CommandResult(status: process.terminationStatus, output: output)
     }
 
-    /// 返回 ["-host", "1.2.3.4"] 或 ["-net", "10.0.0.0/8"]
+    /// Возвращает ["-host", "1.2.3.4"] или ["-net", "10.0.0.0/8"]
     static func destinationArguments(_ address: String) -> [String] {
         address.contains("/") ? ["-net", address] : ["-host", address]
     }
@@ -55,7 +55,7 @@ public enum RouteTool {
     }
 
     public static func add(_ address: String, via hop: NextHop) -> Result<Void, RouteToolError> {
-        guard let args = addArguments(address, via: hop) else { return .failure(RouteToolError(message: "缺少网关或网卡")) }
+        guard let args = addArguments(address, via: hop) else { return .failure(RouteToolError(message: "Не указан шлюз или интерфейс")) }
         let result = run(args)
         return result.succeeded ? .success(()) : .failure(RouteToolError(message: result.output))
     }
@@ -65,7 +65,7 @@ public enum RouteTool {
         return result.succeeded ? .success(()) : .failure(RouteToolError(message: result.output))
     }
 
-    /// 查询内核对某个目标实际选择的路由（最长前缀匹配），无需 root
+    /// Запрашивает маршрут, который ядро фактически выбирает для адреса (самый длинный префикс), root не нужен
     public static func get(_ address: String) -> RouteInfo? {
         let result = run(["-n", "get"] + destinationArguments(address))
         guard result.succeeded else { return nil }

@@ -82,7 +82,7 @@ final class RouteToolTests {
 
 @Suite(.serialized)
 final class RoutingTableTests {
-    /// 构造一条 NET_RT_DUMP 消息
+    /// Собирает одно сообщение NET_RT_DUMP
     private func message(flags: Int32, index: UInt16, sockaddrs: [(Int32, [UInt8])]) -> [UInt8] {
         var body: [UInt8] = []
         var addrs: Int32 = 0
@@ -127,11 +127,11 @@ final class RoutingTableTests {
         let local = [LocalAddress(interface: "en0", address: "192.168.1.27", netmask: "255.255.255.0")]
         XCTAssertNotNil(RouteAnalyzer.staleReason(entries[0], localAddresses: local))
         XCTAssertNil(RouteAnalyzer.staleReason(entries[1], localAddresses: local))
-        XCTAssertNil(RoutingTable.exactRoute(for: "0.0.0.0/0", in: entries), "scoped 路由不参与精确匹配")
+        XCTAssertNil(RoutingTable.exactRoute(for: "0.0.0.0/0", in: entries), "scoped-маршруты не участвуют в точном совпадении")
     }
 
     @Test func testLiveDumpReturnsDefaultRoute() {
-        XCTAssertTrue(RoutingTable.dump().contains { $0.prefix == 0 }, "本机路由表应至少包含一条默认路由")
+        XCTAssertTrue(RoutingTable.dump().contains { $0.prefix == 0 }, "В таблице маршрутов должен быть хотя бы один маршрут по умолчанию")
     }
 }
 
@@ -144,12 +144,12 @@ final class DNSMessageTests {
         var response = query
         response[2] = 0x81; response[3] = 0x80 // QR, RD, RA
         response[7] = 2 // ANCOUNT
-        // CNAME: 指向问题中的名字（压缩指针 0xC00C）
+        // CNAME: указывает на имя из вопроса (указатель сжатия 0xC00C)
         response += [0xC0, 0x0C, 0, 5, 0, 1, 0, 0, 0, 60, 0, 2, 0xC0, 0x10]
         // A: 93.184.216.34
         response += [0xC0, 0x10, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 93, 184, 216, 34]
         XCTAssertEqual(DNSMessage.parseA(response, expectedID: 0x1234), .success(["93.184.216.34"]))
-        XCTAssertEqual(DNSMessage.parseA(response, expectedID: 0x9999), .failure(.failed("ID 不匹配")))
+        XCTAssertEqual(DNSMessage.parseA(response, expectedID: 0x9999), .failure(.failed("ID не совпадает")))
 
         var nx = query
         nx[2] = 0x81; nx[3] = 0x83
@@ -177,7 +177,7 @@ final class GatewayDetectorTests {
         let snapshot = GatewayDetector.choose(entries: entries, serviceOrder: ["vpn", "wifi", "eth"], preferredInterface: "auto")
         XCTAssertEqual(snapshot.physical?.interface, "en0")
         XCTAssertEqual(snapshot.physicalInterface?.dnsServers, ["192.168.1.1"])
-        XCTAssertEqual(snapshot.interfaces.first { $0.name == "utun19" }?.router, nil, "VPN 的 Router 等于自身地址，应视为无网关")
+        XCTAssertEqual(snapshot.interfaces.first { $0.name == "utun19" }?.router, nil, "Router у VPN равен его собственному адресу — считаем, что шлюза нет")
         XCTAssertEqual(snapshot.interfaces.first { $0.name == "utun19" }?.isVirtual, true)
     }
 
@@ -187,9 +187,9 @@ final class GatewayDetectorTests {
     }
 }
 
-// MARK: - 引擎一致性测试
+// MARK: - Тесты согласованности движка
 
-/// 模拟内核路由表与网络环境
+/// Имитация таблицы маршрутов ядра и сетевого окружения
 final class FakeSystem: RouteSystem {
     var network: GatewayDetector.Snapshot
     var table: [String: RouteEntry] = [:]
@@ -205,7 +205,7 @@ final class FakeSystem: RouteSystem {
     func routingTable() -> [RouteEntry] { Array(table.values) }
 
     func addRoute(_ address: String, via hop: NextHop) -> Result<Void, RouteToolError> {
-        if failAdd.contains(address) { return .failure(RouteToolError(message: "模拟失败")) }
+        if failAdd.contains(address) { return .failure(RouteToolError(message: "Имитация сбоя")) }
         if table[address] != nil { return .failure(RouteToolError(message: "File exists")) }
         table[address] = FakeSystem.entry(address, gateway: hop.gateway, network: network, interface: hop.interface)
         operations.append("add \(address) \(hop.gateway ?? hop.interface ?? "")")
@@ -319,7 +319,7 @@ final class RouteEngineTests {
 
         system.network = Self.wifi
         system.operations.removeAll()
-        engine.reconcileNow(reason: "网络状态变化")
+        engine.reconcileNow(reason: "изменилось состояние сети")
 
         XCTAssertEqual(system.table["203.0.113.22"]?.gateway, "192.168.1.1")
         XCTAssertEqual(system.table["203.0.113.22"]?.interfaceAddress, "192.168.1.27")
@@ -329,7 +329,7 @@ final class RouteEngineTests {
 
     @Test func testFixesRouteWithStaleSourceAddress() {
         let engine = makeEngine()
-        // 网关相同但仍绑定旧网络的源地址（route change 后常见）
+        // Шлюз тот же, но маршрут всё ещё привязан к адресу источника старой сети (частое явление после route change)
         var stale = FakeSystem.entry("1.2.3.4", gateway: "192.168.1.1", network: Self.wifi)
         stale.interfaceAddress = "172.20.10.9"
         system.table["1.2.3.4"] = stale
@@ -344,8 +344,8 @@ final class RouteEngineTests {
 
         system.network = Self.offline
         engine.reconcileNow()
-        XCTAssertNotNil(system.table["1.2.3.4"], "断网时不应删除路由")
-        XCTAssertTrue(status(engine, rule)?.error?.contains("保留") ?? false)
+        XCTAssertNotNil(system.table["1.2.3.4"], "Без сети маршрут удалять нельзя")
+        XCTAssertTrue(status(engine, rule)?.error?.contains("сохраняю") ?? false)
 
         system.network = Self.hotspot
         engine.reconcileNow()
@@ -355,7 +355,7 @@ final class RouteEngineTests {
     @Test func testRepairsRouteRemovedByAnotherProgram() {
         let engine = makeEngine()
         update(engine) { $0.rules = [RouteRule(target: "1.2.3.4")] }
-        system.table["1.2.3.4"] = nil // 例如 VPN 连接时清理了路由
+        system.table["1.2.3.4"] = nil // например, VPN при подключении очистил маршруты
         engine.reconcileNow()
         XCTAssertEqual(system.table["1.2.3.4"]?.gateway, "192.168.1.1")
     }
@@ -364,12 +364,12 @@ final class RouteEngineTests {
         let engine = makeEngine()
         let a = RouteRule(target: "1.2.3.4"), b = RouteRule(target: "5.6.7.8")
         update(engine) { $0.rules = [a, b] }
-        // 5.6.7.8 被其他程序改成了别的网关
+        // 5.6.7.8 другая программа перевела на другой шлюз
         system.table["5.6.7.8"] = FakeSystem.entry("5.6.7.8", gateway: "192.168.1.254", network: Self.wifi)
 
         update(engine) { $0.rules = [] }
         XCTAssertNil(system.table["1.2.3.4"])
-        XCTAssertEqual(system.table["5.6.7.8"]?.gateway, "192.168.1.254", "不应删除别人的路由")
+        XCTAssertEqual(system.table["5.6.7.8"]?.gateway, "192.168.1.254", "Чужой маршрут удалять нельзя")
         XCTAssertTrue(engine.currentState().managedRoutes.isEmpty)
     }
 
@@ -380,18 +380,18 @@ final class RouteEngineTests {
         XCTAssertEqual(system.table["1.2.3.4"]?.gateway, "192.168.1.1")
 
         update(engine) { $0.rules = [] }
-        XCTAssertEqual(system.table["1.2.3.4"]?.gateway, "192.168.1.254", "删除规则后应恢复原有路由")
+        XCTAssertEqual(system.table["1.2.3.4"]?.gateway, "192.168.1.254", "После удаления правила должен восстановиться прежний маршрут")
     }
 
     @Test func testAdoptedIdenticalRouteIsKeptAfterRuleRemoval() {
-        // 例如 VPN 客户端自己的 100.64.0.0/10 → utun19
+        // например, собственный маршрут VPN-клиента 100.64.0.0/10 → utun19
         system.table["100.64.0.0/10"] = FakeSystem.entry("100.64.0.0/10", gateway: nil, network: Self.wifi, interface: "utun19")
         let engine = makeEngine()
         update(engine) { $0.rules = [RouteRule(target: "100.64.0.0/10", via: .interface("utun19"))] }
-        XCTAssertTrue(system.operations.isEmpty, "相同的路由不应被重建")
+        XCTAssertTrue(system.operations.isEmpty, "Такой же маршрут не должен пересоздаваться")
 
         update(engine) { $0.rules = [] }
-        XCTAssertNotNil(system.table["100.64.0.0/10"], "删除规则不应删除原本就存在的路由")
+        XCTAssertNotNil(system.table["100.64.0.0/10"], "Удаление правила не должно удалять маршрут, существовавший ранее")
     }
 
     @Test func testAdoptedRouteBecomesOwnedAfterReplacement() {
@@ -403,18 +403,18 @@ final class RouteEngineTests {
         XCTAssertEqual(system.table["1.2.3.4"]?.gateway, "172.20.10.1")
 
         update(engine) { $0.rules = [] }
-        XCTAssertNil(system.table["1.2.3.4"], "网络切换后重建的路由归我们所有，删除规则时清理")
+        XCTAssertNil(system.table["1.2.3.4"], "Маршрут, пересозданный после смены сети, принадлежит нам и удаляется вместе с правилом")
     }
 
     @Test func testStaleRouteIsNotRestored() {
-        // 在热点网络下留下的失效路由
+        // Устаревший маршрут, оставшийся от сети точки доступа
         system.table["203.0.113.22"] = FakeSystem.entry("203.0.113.22", gateway: "172.20.10.1", network: Self.hotspot)
         let engine = makeEngine()
         update(engine) { $0.rules = [RouteRule(target: "203.0.113.22")] }
         XCTAssertEqual(system.table["203.0.113.22"]?.gateway, "192.168.1.1")
 
         update(engine) { $0.rules = [] }
-        XCTAssertNil(system.table["203.0.113.22"], "失效路由不应被恢复")
+        XCTAssertNil(system.table["203.0.113.22"], "Устаревший маршрут не должен восстанавливаться")
     }
 
     @Test func testFailedAddIsNotRecordedAndIsRetried() {
@@ -422,7 +422,7 @@ final class RouteEngineTests {
         let engine = makeEngine()
         let rule = RouteRule(target: "1.2.3.4")
         update(engine) { $0.rules = [rule] }
-        XCTAssertEqual(status(engine, rule)?.error, "模拟失败")
+        XCTAssertEqual(status(engine, rule)?.error, "Имитация сбоя")
         XCTAssertTrue(engine.currentState().managedRoutes.isEmpty)
 
         system.failAdd = []
@@ -453,13 +453,13 @@ final class RouteEngineTests {
         clock.date += 11 * 60
         system.dnsAnswers["cdn.example.com"] = .success(["2.2.2.2"])
         engine.reconcileNow()
-        XCTAssertNotNil(system.table["1.1.1.1"], "旧 IP 在保留期内继续有效")
+        XCTAssertNotNil(system.table["1.1.1.1"], "Старый IP действует, пока удерживается")
         XCTAssertNotNil(system.table["2.2.2.2"])
         XCTAssertEqual(status(engine, rule)?.retainedAddresses, ["1.1.1.1"])
 
         clock.date += 7 * 3600
         engine.reconcileNow()
-        XCTAssertNil(system.table["1.1.1.1"], "超过保留期后删除")
+        XCTAssertNil(system.table["1.1.1.1"], "После срока удержания удаляется")
         XCTAssertNotNil(system.table["2.2.2.2"])
     }
 
@@ -493,7 +493,7 @@ final class RouteEngineTests {
         let restarted = makeEngine()
         XCTAssertEqual(restarted.currentState().config.rules, [rule])
         update(restarted) { $0.rules = [] }
-        XCTAssertNil(system.table["1.2.3.4"], "重启后仍能清理之前添加的路由")
+        XCTAssertNil(system.table["1.2.3.4"], "После перезапуска ранее добавленные маршруты всё равно очищаются")
     }
 
     @Test func testConflictingNextHopsPreferEarlierRule() {
@@ -515,7 +515,7 @@ final class RouteEngineTests {
         XCTAssertNil(system.table["100.64.0.0/10"]?.gateway)
         XCTAssertEqual(system.table["100.64.0.0/10"]?.interface, "utun19")
         XCTAssertEqual(system.table["8.8.8.8"]?.gateway, "192.168.1.254")
-        XCTAssertNil(system.table["9.9.9.9"], "网关不在当前网络中时不添加")
+        XCTAssertNil(system.table["9.9.9.9"], "Если шлюз не входит в текущую сеть, маршрут не добавляется")
     }
 
     @Test func testDeleteSystemRoutesRefusesManagedRoutes() {

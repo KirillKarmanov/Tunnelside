@@ -30,14 +30,14 @@ struct DiagnosticReport: Sendable {
         var addresses: [(String, String)] = []
         switch parsed {
         case .host(let ip):
-            addresses = [(ip, "输入")]
+            addresses = [(ip, "Ввод")]
         case .network(let net, let prefix):
-            addresses = [("\(net)/\(prefix)", "输入")]
+            addresses = [("\(net)/\(prefix)", "Ввод")]
         case .domain(let domain):
             report.physicalDNS = DNSResolver.resolve(domain, mode: .physical, customServers: [], physical: snapshot.physicalInterface)
             report.systemDNS = DNSResolver.resolveSystem(domain)
-            if case .success(let ips) = report.physicalDNS { addresses += ips.map { ($0, "物理网络 DNS") } }
-            if case .success(let ips) = report.systemDNS { addresses += ips.map { ($0, "系统 DNS") } }
+            if case .success(let ips) = report.physicalDNS { addresses += ips.map { ($0, "DNS физической сети") } }
+            if case .success(let ips) = report.systemDNS { addresses += ips.map { ($0, "Системный DNS") } }
         }
 
         var merged: [(String, [String])] = []
@@ -63,15 +63,15 @@ enum TCPProbe {
         case failed(String)
         var description: String {
             switch self {
-            case .timeout: return "连接超时"
+            case .timeout: return "Тайм-аут соединения"
             case .failed(let m): return m
             }
         }
     }
 
-    /// 返回建立 TCP 连接的耗时（毫秒）
+    /// Возвращает время установки TCP-соединения (мс)
     static func connect(_ ip: String, port: UInt16, timeout: TimeInterval) -> Result<Double, ProbeError> {
-        guard let value = TargetParser.ipv4Value(ip) else { return .failure(.failed("无效地址")) }
+        guard let value = TargetParser.ipv4Value(ip) else { return .failure(.failed("Некорректный адрес")) }
         let fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         guard fd >= 0 else { return .failure(.failed(String(cString: strerror(errno)))) }
         defer { close(fd) }
@@ -110,15 +110,15 @@ struct DiagnosticsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                TextField("输入 IP、网段或域名，检查实际走哪个网卡", text: $navigation.diagnosticsTarget)
+                TextField("Введите IP, подсеть или домен — покажем, через какой интерфейс идёт трафик", text: $navigation.diagnosticsTarget)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(run)
-                Text("TCP 端口")
+                Text("TCP-порт")
                 TextField("443", text: $portText)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 60)
                 Button(action: run) {
-                    if running { ProgressView().controlSize(.small) } else { Text("诊断") }
+                    if running { ProgressView().controlSize(.small) } else { Text("Проверить") }
                 }
                 .disabled(running || navigation.diagnosticsTarget.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -126,12 +126,12 @@ struct DiagnosticsView: View {
             Divider()
 
             if invalid {
-                ContentUnavailableView("无法识别的目标", systemImage: "questionmark.circle")
+                ContentUnavailableView("Некорректный адрес", systemImage: "questionmark.circle")
             } else if let report {
                 ScrollView { reportView(report).padding(16) }
             } else {
-                ContentUnavailableView("连通性诊断", systemImage: "stethoscope",
-                                       description: Text("对比系统 DNS 与物理网络 DNS 的解析结果，\n查看每个地址实际使用的网卡和网关，并测试 TCP 连接。"))
+                ContentUnavailableView("Диагностика связи", systemImage: "stethoscope",
+                                       description: Text("Сравнивает адреса от системного DNS и DNS физической сети,\nпоказывает интерфейс и шлюз для каждого адреса и проверяет TCP-соединение."))
             }
         }
         .onChange(of: navigation.diagnosticsRequest) { run() }
@@ -160,12 +160,12 @@ struct DiagnosticsView: View {
             summary(report)
 
             if report.systemDNS != nil || report.physicalDNS != nil {
-                GroupBox("DNS 解析") {
+                GroupBox("Разрешение DNS") {
                     VStack(alignment: .leading, spacing: 6) {
-                        dnsLine("物理网络 DNS", report.physicalDNS)
-                        dnsLine("系统 DNS", report.systemDNS)
+                        dnsLine("DNS физической сети", report.physicalDNS)
+                        dnsLine("Системный DNS", report.systemDNS)
                         if case .success(let a)? = report.physicalDNS, case .success(let b)? = report.systemDNS, Set(a).isDisjoint(with: b) {
-                            Label("两种 DNS 的结果完全不同：系统 DNS 可能被 VPN 或代理接管。MacOSRoute 默认使用物理网络 DNS。", systemImage: "info.circle")
+                            Label("Ответы двух DNS полностью различаются: системный DNS, возможно, перехвачен VPN или прокси. MacOSRoute по умолчанию использует DNS физической сети.", systemImage: "info.circle")
                                 .font(.callout)
                                 .foregroundStyle(.orange)
                         }
@@ -175,10 +175,10 @@ struct DiagnosticsView: View {
                 }
             }
 
-            GroupBox("路由与连通性") {
+            GroupBox("Маршруты и связь") {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                     GridRow {
-                        Text("地址"); Text("来源"); Text("网卡"); Text("网关"); Text("匹配路由"); Text("TCP")
+                        Text("Адрес"); Text("Источник"); Text("Интерфейс"); Text("Шлюз"); Text("Маршрут"); Text("TCP")
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -203,11 +203,11 @@ struct DiagnosticsView: View {
             }
 
             let matched = matchingRules(report)
-            GroupBox("MacOSRoute 规则") {
+            GroupBox("Правила MacOSRoute") {
                 VStack(alignment: .leading, spacing: 6) {
                     if matched.isEmpty {
-                        Text("没有规则覆盖这些地址。").foregroundStyle(.secondary)
-                        Button("添加规则（经由物理网关）") {
+                        Text("Ни одно правило не охватывает эти адреса.").foregroundStyle(.secondary)
+                        Button("Добавить правило (через физический шлюз)") {
                             client.addTargets(from: report.target)
                             navigation.section = .rules
                         }
@@ -241,13 +241,13 @@ struct DiagnosticsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(report.target).font(.title3.bold()).textSelection(.enabled)
                 if total == 0 {
-                    Text("没有可检测的地址")
+                    Text("Нет адресов для проверки")
                 } else if ok {
-                    Text("全部 \(total) 个地址都经由物理网卡 \(physical ?? "")")
+                    Text("Все адреса (\(total)) идут через физический интерфейс \(physical ?? "")")
                 } else {
-                    Text("\(total - viaPhysical)/\(total) 个地址没有经由物理网卡\(physical.map { " \($0)" } ?? "")")
+                    Text("\(total - viaPhysical) из \(total) адресов идут не через физический интерфейс\(physical.map { " \($0)" } ?? "")")
                 }
-                Text("\(report.kind) · 诊断于 \(report.finishedAt.formatted(date: .omitted, time: .standard))")
+                Text("\(report.kind) · проверено в \(report.finishedAt.formatted(date: .omitted, time: .standard))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -2,15 +2,15 @@ import Foundation
 
 public enum RouteTarget: Equatable, Sendable {
     case host(String)
-    /// 规范化后的网络地址与前缀长度
+    /// Нормализованный адрес сети и длина префикса
     case network(String, prefix: Int)
     case domain(String)
 
     public var kindLabel: String {
         switch self {
         case .host: return "IP"
-        case .network: return "网段"
-        case .domain: return "域名"
+        case .network: return "Подсеть"
+        case .domain: return "Домен"
         }
     }
 }
@@ -24,7 +24,7 @@ public enum TargetParser {
         var s = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !s.isEmpty else { return nil }
 
-        // 允许直接粘贴 URL：https://example.com:8443/path -> example.com
+        // Можно вставить URL целиком: https://example.com:8443/path -> example.com
         if s.contains("://"), let host = URLComponents(string: s)?.host {
             s = host
         }
@@ -41,14 +41,14 @@ public enum TargetParser {
             return .host(ipv4String(value))
         }
 
-        // 看起来像 IP 但不合法（如 1.2.3.256），不要当作域名
+        // Похоже на IP, но некорректно (например, 1.2.3.256) — не считать доменом
         if s.allSatisfy({ $0.isNumber || $0 == "." }) { return nil }
 
         let host = s.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
         return isValidHostname(host) ? .domain(host) : nil
     }
 
-    /// 将用户输入按空白、逗号、分号拆分为多个目标
+    /// Разбить ввод пользователя на адреса по пробелам, запятым и точкам с запятой
     public static func splitInput(_ text: String) -> [String] {
         text.components(separatedBy: CharacterSet(charactersIn: " \t\n\r,;，；"))
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -83,19 +83,19 @@ public enum TargetParser {
         ipv4Value(mask).map { $0.nonzeroBitCount }
     }
 
-    /// ip 是否位于 address/mask 所在的子网
+    /// Входит ли ip в подсеть address/mask
     public static func sameSubnet(_ ip: String, _ address: String, mask: String) -> Bool {
         guard let a = ipv4Value(ip), let b = ipv4Value(address), let m = ipv4Value(mask) else { return false }
         return a & m == b & m
     }
 
-    /// Surge / Clash 等代理的 Fake-IP 网段 198.18.0.0/15
+    /// Подсеть Fake-IP прокси вроде Surge / Clash: 198.18.0.0/15
     public static func isFakeIP(_ ip: String) -> Bool {
         guard let v = ipv4Value(ip) else { return false }
         return v & maskValue(prefix: 15) == 0xC612_0000
     }
 
-    /// 不应作为路由目标的解析结果
+    /// Адреса домена, на которые нельзя строить маршрут
     public static func isUnroutableResolution(_ ip: String) -> Bool {
         guard let v = ipv4Value(ip) else { return true }
         return v == 0 || v >> 24 == 127 || v >> 28 == 0xE || v == ~UInt32(0)

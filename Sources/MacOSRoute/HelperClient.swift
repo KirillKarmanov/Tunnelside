@@ -1,7 +1,7 @@
 import Foundation
 import RouteShared
 
-/// 与 root Helper 通信，维护界面所需的状态
+/// Связь с root-службой и состояние для интерфейса
 @MainActor
 final class HelperClient: ObservableObject {
     enum Status: Equatable {
@@ -17,11 +17,11 @@ final class HelperClient: ObservableObject {
     @Published private(set) var isBusy = false
     @Published var alertMessage: String?
 
-    /// 开发调试：连接用户域（launchctl gui/<uid>）中的 Helper，而不是系统 LaunchDaemon
+    /// Для отладки: подключаться к службе в пользовательском домене (launchctl gui/<uid>), а не к системному LaunchDaemon
     private let useDevAgent = ProcessInfo.processInfo.environment["MACOSROUTE_DEV_AGENT"] == "1"
     private var connection: NSXPCConnection?
     private var timer: Timer?
-    /// 每次本地修改配置时递增，用于丢弃修改前发出的 fetch 结果，防止界面闪回
+    /// Увеличивается при каждом локальном изменении конфигурации, чтобы отбросить результаты fetch, отправленного до изменения, и интерфейс не откатывался
     private var configGeneration = 0
 
     init() {
@@ -31,7 +31,7 @@ final class HelperClient: ObservableObject {
         }
     }
 
-    /// 只有版本匹配的 Helper 才能修改配置（协议可能已变化）
+    /// Менять конфигурацию может только служба совпадающей версии (протокол мог измениться)
     var canModify: Bool { status == .running }
     var config: HelperConfig? { state?.config }
     var rules: [RouteRule] { state?.config.rules ?? [] }
@@ -46,12 +46,12 @@ final class HelperClient: ObservableObject {
         useDevAgent || FileManager.default.fileExists(atPath: RouteConstants.launchDaemonPlistPath)
     }
 
-    // MARK: - 读取
+    // MARK: - Чтение
 
     func refresh() {
         guard isInstalled else {
-            // 旧标识的 Helper 无法通过新的 Mach 服务名连接，提示更新以完成迁移
-            status = HelperInstaller.legacyHelperInstalled ? .outdated(installed: "旧版") : .notInstalled
+            // К службе со старым идентификатором не подключиться по новому имени Mach-сервиса — предлагаем обновить для завершения миграции
+            status = HelperInstaller.legacyHelperInstalled ? .outdated(installed: "старая версия") : .notInstalled
             state = nil
             return
         }
@@ -69,16 +69,16 @@ final class HelperClient: ObservableObject {
 
     private func apply(_ decoded: HelperState?, error: String?) {
         guard let decoded else {
-            status = .unreachable(error ?? "无法读取后台服务状态")
+            status = .unreachable(error ?? "Не удалось прочитать состояние фоновой службы")
             return
         }
         state = decoded
         status = decoded.version == RouteConstants.helperVersion ? .running : .outdated(installed: decoded.version)
     }
 
-    // MARK: - 修改规则
+    // MARK: - Изменение правил
 
-    /// 返回无法识别的输入
+    /// Возвращает нераспознанный ввод
     @discardableResult
     func addTargets(from text: String, note: String = "", group: String = "", via: RouteVia = .physical) -> [String] {
         let inputs = TargetParser.splitInput(text)
@@ -135,7 +135,7 @@ final class HelperClient: ObservableObject {
         mutateConfig { $0.rules.removeAll { ids.contains($0.id) } }
     }
 
-    /// 规则顺序决定出口冲突时的优先级
+    /// Порядок правил задаёт приоритет при конфликте выходов
     func moveRules(_ ids: Set<RouteRule.ID>, toTop: Bool) {
         mutateConfig { config in
             let moved = config.rules.filter { ids.contains($0.id) }
@@ -156,10 +156,10 @@ final class HelperClient: ObservableObject {
         }
     }
 
-    /// 基于最新配置修改并提交。若其他窗口 / 实例已先修改（revision 冲突），拉取最新状态后重放本次修改。
+    /// Изменить свежую конфигурацию и отправить. Если другое окно / экземпляр успели изменить её раньше (конфликт revision), загрузить свежее состояние и повторить изменение.
     func mutateConfig(_ body: @escaping (inout HelperConfig) -> Void) {
         guard canModify, let base = state?.config else {
-            alertMessage = status == .running ? "后台服务未就绪" : "请先安装或更新后台服务"
+            alertMessage = status == .running ? "Фоновая служба не готова" : "Сначала установите или обновите фоновую службу"
             return
         }
         var config = base
@@ -173,7 +173,7 @@ final class HelperClient: ObservableObject {
     private func submit(_ config: HelperConfig, body: @escaping (inout HelperConfig) -> Void, attemptsLeft: Int) {
         guard let data = try? RouteJSON.encoder().encode(config) else { return }
         remote { [weak self] error in
-            self?.alertMessage = "保存失败: \(error)"
+            self?.alertMessage = "Не удалось сохранить: \(error)"
             self?.configGeneration += 1
             self?.refresh()
         }?.updateConfig(data) { error, conflict in
@@ -184,7 +184,7 @@ final class HelperClient: ObservableObject {
                     return
                 }
                 self.configGeneration += 1
-                if conflict { self.alertMessage = "配置已被其他窗口修改，请重试" }
+                if conflict { self.alertMessage = "Конфигурацию изменили в другом окне, повторите" }
                 if let error { self.alertMessage = error }
                 self.refresh()
             }
@@ -229,13 +229,13 @@ final class HelperClient: ObservableObject {
         }?.deleteSystemRoutes(addresses) { error in
             DispatchQueue.main.async { [weak self] in
                 self?.isBusy = false
-                if let error { self?.alertMessage = "部分路由未删除：\n\(error)" }
+                if let error { self?.alertMessage = "Часть маршрутов не удалена:\n\(error)" }
                 completion()
             }
         }
     }
 
-    // MARK: - 安装 / 卸载
+    // MARK: - Установка / удаление
 
     func installHelper() {
         isBusy = true
@@ -246,7 +246,7 @@ final class HelperClient: ObservableObject {
                 try? await Task.sleep(nanoseconds: 800_000_000)
             } catch HelperInstaller.InstallError.cancelled {
             } catch {
-                alertMessage = "安装失败: \(error.localizedDescription)"
+                alertMessage = "Не удалось установить: \(error.localizedDescription)"
             }
             isBusy = false
             refresh()
@@ -261,10 +261,10 @@ final class HelperClient: ObservableObject {
                     try await HelperInstaller.uninstall()
                     self?.resetConnection()
                 } catch HelperInstaller.InstallError.cancelled {
-                    // 用户取消：恢复同步
+                    // Пользователь отменил — возобновить синхронизацию
                     self?.reapply()
                 } catch {
-                    self?.alertMessage = "卸载失败: \(error.localizedDescription)"
+                    self?.alertMessage = "Не удалось удалить: \(error.localizedDescription)"
                 }
                 self?.isBusy = false
                 self?.refresh()
@@ -274,7 +274,7 @@ final class HelperClient: ObservableObject {
             finish()
             return
         }
-        // 先让 Helper 清理自己添加的路由
+        // Сначала служба убирает добавленные ею маршруты
         proxy.removeAllRoutes { _ in
             DispatchQueue.main.async { finish() }
         }
@@ -309,15 +309,15 @@ final class HelperClient: ObservableObject {
     }
 }
 
-/// 跨视图导航（例如从规则或路由表跳转到诊断）
+/// Навигация между разделами (например, из правил или таблицы маршрутов в диагностику)
 @MainActor
 final class AppNavigation: ObservableObject {
     enum Section: String, CaseIterable, Identifiable {
-        case rules = "路由规则"
-        case routeTable = "系统路由表"
-        case diagnostics = "诊断"
-        case logs = "日志"
-        case settings = "设置"
+        case rules = "Правила"
+        case routeTable = "Таблица маршрутов"
+        case diagnostics = "Диагностика"
+        case logs = "Журнал"
+        case settings = "Настройки"
 
         var id: String { rawValue }
         var symbol: String {
@@ -333,7 +333,7 @@ final class AppNavigation: ObservableObject {
 
     @Published var section: Section? = .rules
     @Published var diagnosticsTarget = ""
-    /// 递增以触发诊断视图自动开始
+    /// Увеличить, чтобы диагностика запустилась автоматически
     @Published var diagnosticsRequest = 0
 
     func diagnose(_ target: String) {

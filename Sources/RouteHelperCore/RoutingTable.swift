@@ -2,14 +2,14 @@ import Darwin
 import Foundation
 import RouteShared
 
-/// 内核 IPv4 路由表中的一条记录
+/// Запись таблицы маршрутов IPv4 ядра
 public struct RouteEntry: Equatable, Hashable, Identifiable, Sendable {
     public var destination: String
     public var prefix: Int
-    /// IPv4 网关；直连 / 接口路由为 nil
+    /// IPv4-шлюз; у прямых / интерфейсных маршрутов nil
     public var gateway: String?
     public var interface: String
-    /// 路由使用的本机地址（ifa）
+    /// Локальный адрес маршрута (ifa)
     public var interfaceAddress: String?
     public var flags: Int32
 
@@ -22,7 +22,7 @@ public struct RouteEntry: Equatable, Hashable, Identifiable, Sendable {
         self.flags = flags
     }
 
-    /// 与规则地址格式一致：主机为 "1.2.3.4"，网段为 "10.0.0.0/8"
+    /// Тот же формат, что у адресов правил: хост — "1.2.3.4", подсеть — "10.0.0.0/8"
     public var address: String { prefix == 32 ? destination : "\(destination)/\(prefix)" }
     public var id: String { "\(address)|\(gateway ?? "link")|\(interface)|\(flags)" }
 
@@ -34,7 +34,7 @@ public struct RouteEntry: Equatable, Hashable, Identifiable, Sendable {
 
     public var displayDestination: String { prefix == 0 && destination == "0.0.0.0" ? "default" : address }
 
-    /// 与 netstat -rn 一致的标志字符串
+    /// Строка флагов как в netstat -rn
     public var flagString: String {
         let table: [(Int32, Character)] = [
             (RTF_UP, "U"), (RTF_GATEWAY, "G"), (RTF_HOST, "H"), (RTF_REJECT, "R"), (RTF_DYNAMIC, "D"),
@@ -51,7 +51,7 @@ public enum RoutingTable {
         for _ in 0..<3 {
             var length = 0
             guard sysctl(&mib, u_int(mib.count), nil, &length, nil, 0) == 0 else { return [] }
-            length += length / 4 + 1024 // 路由表可能在两次调用之间增长
+            length += length / 4 + 1024 // таблица маршрутов может вырасти между двумя вызовами
             var buffer = [UInt8](repeating: 0, count: length)
             if sysctl(&mib, u_int(mib.count), &buffer, &length, nil, 0) == 0 {
                 return buffer.withUnsafeBytes { parse(UnsafeRawBufferPointer(rebasing: $0[0..<length]), interfaceName: interfaceName) }
@@ -66,7 +66,7 @@ public enum RoutingTable {
         return if_indextoname(UInt32(index), &name) != nil ? String(cString: name) : "if\(index)"
     }
 
-    /// 解析 NET_RT_DUMP 返回的 rt_msghdr 序列
+    /// Разбирает последовательность rt_msghdr из ответа NET_RT_DUMP
     public static func parse(_ bytes: UnsafeRawBufferPointer, interfaceName: (UInt16) -> String) -> [RouteEntry] {
         let headerSize = MemoryLayout<rt_msghdr>.size
         var entries: [RouteEntry] = []
@@ -115,21 +115,21 @@ public enum RoutingTable {
         return "\(sa[4]).\(sa[5]).\(sa[6]).\(sa[7])"
     }
 
-    /// 掩码 sockaddr 可能被截断（sa_len < 8）或 family 为 0/255
+    /// sockaddr маски может быть усечён (sa_len < 8) или иметь family 0/255
     private static func maskPrefix(_ sa: [UInt8]) -> Int {
         var bits = 0
         for i in 4..<8 where i < sa.count { bits += sa[i].nonzeroBitCount }
         return bits
     }
 
-    /// 精确匹配某个地址的非 scoped 路由；优先返回静态路由，其次非克隆路由
+    /// Точное совпадение не-scoped маршрута для адреса; сначала статические маршруты, затем не клонированные
     public static func exactRoute(for address: String, in entries: [RouteEntry]) -> RouteEntry? {
         let candidates = entries.filter { $0.address == address && !$0.isScoped && !$0.isLinkLayer }
         return candidates.first(where: \.isStatic) ?? candidates.first(where: { !$0.isCloned }) ?? candidates.first
     }
 }
 
-/// 本机 IPv4 接口地址
+/// Локальный IPv4-адрес интерфейса
 public struct LocalAddress: Equatable, Sendable {
     public var interface: String
     public var address: String
@@ -165,13 +165,13 @@ public struct LocalAddress: Equatable, Sendable {
 }
 
 public enum RouteAnalyzer {
-    /// 判断静态网关路由是否已失效：网关不在任何当前接口的子网内，或路由绑定的本机地址已不存在
+    /// Устарел ли статический маршрут через шлюз: шлюз не входит в подсеть ни одного текущего интерфейса или локальный адрес маршрута больше не существует
     public static func staleReason(_ entry: RouteEntry, localAddresses: [LocalAddress]) -> String? {
         guard entry.isStatic, entry.hasGateway, !entry.isScoped, !entry.isCloned, let gateway = entry.gateway else { return nil }
         if let ifa = entry.interfaceAddress, !localAddresses.contains(where: { $0.address == ifa }) {
-            return "绑定的本机地址 \(ifa) 已不存在"
+            return "Локальный адрес \(ifa), к которому привязан маршрут, больше не существует"
         }
         let reachable = localAddresses.contains { TargetParser.sameSubnet(gateway, $0.address, mask: $0.netmask) }
-        return reachable ? nil : "网关 \(gateway) 不在任何当前网络中"
+        return reachable ? nil : "Шлюз \(gateway) не входит ни в одну текущую сеть"
     }
 }

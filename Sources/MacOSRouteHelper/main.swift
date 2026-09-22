@@ -22,7 +22,7 @@ final class HelperService: NSObject, RouteHelperProtocol {
 
     func updateConfig(_ configData: Data, withReply reply: @escaping (String?, Bool) -> Void) {
         guard let config = try? RouteJSON.decoder().decode(HelperConfig.self, from: configData) else {
-            reply("配置格式无效", false)
+            reply("Некорректный формат конфигурации", false)
             return
         }
         engine.updateConfig(config, completion: reply)
@@ -51,9 +51,9 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
-        // 只允许管理员账户（本来就能 sudo 修改路由）连接
+        // Подключаться могут только администраторы (они и так могут менять маршруты через sudo)
         guard isAdministrator(uid: connection.effectiveUserIdentifier) else {
-            FileHandle.standardError.write(Data("拒绝非管理员连接 uid=\(connection.effectiveUserIdentifier)\n".utf8))
+            FileHandle.standardError.write(Data("Отклонено подключение не-администратора uid=\(connection.effectiveUserIdentifier)\n".utf8))
             return false
         }
         if requireSignedClient {
@@ -141,7 +141,7 @@ if arguments.contains("--print-gateway") {
         print("physical: interface=\(gw.interface) router=\(gw.router)")
         exit(0)
     }
-    print("未找到物理网关")
+    print("Физический шлюз не найден")
     exit(1)
 }
 
@@ -159,7 +159,7 @@ if let index = arguments.firstIndex(of: "--resolve"), arguments.indices.contains
 }
 
 let isRoot = getuid() == 0
-// 开发调试：非 root 运行时存到临时目录并跳过 route 命令
+// Для отладки: без root хранить данные во временной папке и не вызывать route
 let storage = isRoot
     ? URL(fileURLWithPath: RouteConstants.supportDirectory)
     : FileManager.default.temporaryDirectory.appendingPathComponent("MacOSRouteHelperDev")

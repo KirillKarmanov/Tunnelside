@@ -16,14 +16,14 @@ struct LogsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Toggle("只看警告和错误", isOn: $onlyProblems)
+                Toggle("Только предупреждения и ошибки", isOn: $onlyProblems)
                 Spacer()
-                Text("\(logs.count) 条 · 完整日志：\(RouteConstants.helperLogPath)")
+                Text("Записей: \(logs.count) · полный журнал: \(RouteConstants.helperLogPath)")
                     .foregroundStyle(.secondary)
-                Button("在访达中显示") {
+                Button("Показать в Finder") {
                     NSWorkspace.shared.selectFile(RouteConstants.helperLogPath, inFileViewerRootedAtPath: "")
                 }
-                Button("复制") {
+                Button("Копировать") {
                     let text = logs.reversed().map { "\($0.date.formatted(date: .numeric, time: .standard)) [\($0.level.rawValue)] \($0.message)" }.joined(separator: "\n")
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
@@ -42,7 +42,7 @@ struct LogsView: View {
                 }
             }
         }
-        .searchable(text: $search, prompt: "搜索日志")
+        .searchable(text: $search, prompt: "Поиск по журналу")
     }
 
     private func symbol(_ level: LogEntry.Level) -> String {

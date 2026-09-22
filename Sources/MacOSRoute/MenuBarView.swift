@@ -15,10 +15,10 @@ struct MenuBarView: View {
 
             if client.canModify {
                 HStack {
-                    TextField("添加 IP / 域名", text: $input)
+                    TextField("Добавить IP / домен", text: $input)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit(add)
-                    Button("添加", action: add)
+                    Button("Добавить", action: add)
                         .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
 
@@ -38,20 +38,20 @@ struct MenuBarView: View {
                 }
             } else {
                 Text(statusMessage).foregroundStyle(.secondary)
-                Button(client.status == .notInstalled ? "安装后台服务" : "更新后台服务") { client.installHelper() }
+                Button(client.status == .notInstalled ? "Установить фоновую службу" : "Обновить фоновую службу") { client.installHelper() }
                     .disabled(client.isBusy)
             }
 
             Divider()
 
             HStack {
-                Button("打开主窗口", action: openMainWindow)
-                Button("重新应用") { client.reapply() }
+                Button("Открыть главное окно", action: openMainWindow)
+                Button("Применить заново") { client.reapply() }
                     .disabled(!client.canModify || client.isBusy)
                 Spacer()
-                Button("退出") { NSApp.terminate(nil) }
+                Button("Выйти") { NSApp.terminate(nil) }
             }
-            Text("退出 App 不影响已设置的路由，后台服务会继续维护。")
+            Text("Выход из приложения не затрагивает маршруты — фоновая служба продолжит их поддерживать.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -61,10 +61,10 @@ struct MenuBarView: View {
 
     private var statusMessage: String {
         switch client.status {
-        case .notInstalled: return "后台服务未安装"
-        case .outdated(let v): return "后台服务 \(v) 需要更新"
-        case .checking: return "正在连接后台服务…"
-        default: return "后台服务未运行"
+        case .notInstalled: return "Фоновая служба не установлена"
+        case .outdated(let v): return "Нужно обновить фоновую службу (установлена: \(v))"
+        case .checking: return "Подключение к фоновой службе…"
+        default: return "Фоновая служба не работает"
         }
     }
 
@@ -74,7 +74,7 @@ struct MenuBarView: View {
                 Text("MacOSRoute").font(.headline)
                 Spacer()
                 if client.canModify {
-                    Toggle(client.isPaused ? "已暂停" : "生效中", isOn: Binding(get: { !client.isPaused }, set: { client.setPaused(!$0) }))
+                    Toggle(client.isPaused ? "На паузе" : "Работает", isOn: Binding(get: { !client.isPaused }, set: { client.setPaused(!$0) }))
                         .toggleStyle(.switch)
                         .controlSize(.mini)
                 }
@@ -83,7 +83,7 @@ struct MenuBarView: View {
                 GatewayLabel().font(.callout)
                 let enabled = client.rules.filter(\.enabled)
                 let ok = enabled.filter { RuleRow(rule: $0, status: client.status(for: $0), paused: client.isPaused).health == .ok }.count
-                Text("\(enabled.count) 条启用规则，\(ok) 条完全生效")
+                Text("Включено правил: \(enabled.count), полностью работают: \(ok)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -92,7 +92,7 @@ struct MenuBarView: View {
 
     private var groupToggles: some View {
         HStack(spacing: 6) {
-            Text("分组").font(.caption).foregroundStyle(.secondary)
+            Text("Группы").font(.caption).foregroundStyle(.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(client.groups, id: \.self) { group in
@@ -108,7 +108,7 @@ struct MenuBarView: View {
                                 .background(on ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12), in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .help(on ? "点击停用分组「\(group)」" : "点击启用分组「\(group)」")
+                        .help(on ? "Нажмите, чтобы выключить группу «\(group)»" : "Нажмите, чтобы включить группу «\(group)»")
                     }
                 }
             }
@@ -132,7 +132,7 @@ struct MenuBarView: View {
         }
         .help(row.detailText)
         .contextMenu {
-            Button("诊断") {
+            Button("Диагностика") {
                 navigation.diagnose(rule.target)
                 openMainWindow()
             }
@@ -140,7 +140,7 @@ struct MenuBarView: View {
     }
 
     private func openMainWindow() {
-        dismiss() // 先收起菜单栏面板，避免它挡住主窗口或抢走焦点
+        dismiss() // Сначала закрываем панель строки меню, чтобы она не заслоняла главное окно и не забирала фокус
         AppWindow.showMain(openWindow)
     }
 

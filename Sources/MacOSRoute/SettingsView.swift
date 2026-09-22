@@ -14,31 +14,31 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("通用") {
-                Toggle("登录时启动 MacOSRoute", isOn: $launchAtLogin)
+            Section("Основные") {
+                Toggle("Запускать MacOSRoute при входе", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in setLaunchAtLogin(enabled) }
-                Text("只影响菜单栏 App。后台服务由系统在开机时启动，退出 App 后路由仍会继续维护。")
+                Text("Касается только приложения в строке меню. Фоновую службу система запускает при загрузке, и после выхода из приложения маршруты продолжают поддерживаться.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("物理网关") {
-                Picker("出口网卡", selection: Binding(get: { config.interface }, set: { value in client.mutateConfig { $0.interface = value } })) {
-                    Text("自动（跟随 Wi-Fi / 有线切换，推荐）").tag(HelperConfig.automaticInterface)
+            Section("Физический шлюз") {
+                Picker("Интерфейс выхода", selection: Binding(get: { config.interface }, set: { value in client.mutateConfig { $0.interface = value } })) {
+                    Text("Автоматически (следует за переключением Wi-Fi / кабель, рекомендуется)").tag(HelperConfig.automaticInterface)
                     ForEach(physicalInterfaceOptions, id: \.self) { Text($0).tag($0) }
                 }
-                Text("自动模式会跳过 VPN 隧道（utun、ipsec、ppp 等），按系统网络服务顺序选择物理网卡的网关。规则的“出口”选择“物理网关”时使用这里的结果。")
+                Text("В автоматическом режиме VPN-туннели (utun, ipsec, ppp и т. п.) пропускаются, а шлюз физического интерфейса выбирается по порядку сетевых служб системы. Этот результат используется, когда у правила выход — «Физический шлюз».")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .disabled(!client.canModify)
 
-            Section("域名解析") {
+            Section("Разрешение доменов") {
                 Picker("DNS", selection: Binding(get: { config.dnsMode }, set: { value in client.mutateConfig { $0.dnsMode = value } })) {
                     ForEach(DNSMode.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 if config.dnsMode == .custom {
-                    TextField("DNS 服务器（逗号分隔）", text: $customServersText, prompt: Text("1.1.1.1, 8.8.8.8"))
+                    TextField("DNS-серверы (через запятую)", text: $customServersText, prompt: Text("1.1.1.1, 8.8.8.8"))
                         .onSubmit(saveCustomServers)
                 }
                 Text(dnsModeHelp)
@@ -46,54 +46,54 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
 
                 Stepper(value: Binding(get: { config.dnsRefreshMinutes }, set: { value in client.mutateConfig { $0.dnsRefreshMinutes = value } }), in: 1...1440) {
-                    LabeledContent("重新解析间隔", value: "\(config.dnsRefreshMinutes) 分钟")
+                    LabeledContent("Обновлять адреса каждые", value: "\(config.dnsRefreshMinutes) мин")
                 }
                 Stepper(value: Binding(get: { config.dnsRetentionHours }, set: { value in client.mutateConfig { $0.dnsRetentionHours = value } }), in: 0...168) {
-                    LabeledContent("旧 IP 保留时间", value: config.dnsRetentionHours == 0 ? "不保留" : "\(config.dnsRetentionHours) 小时")
+                    LabeledContent("Удерживать старые IP", value: config.dnsRetentionHours == 0 ? "Не удерживать" : "\(config.dnsRetentionHours) ч")
                 }
-                Text("CDN 域名的 IP 经常轮换。解析结果变化后，旧 IP 的路由会继续保留一段时间，避免已建立的连接突然改走 VPN。")
+                Text("IP-адреса CDN-доменов часто меняются. Когда адреса домена обновляются, маршруты к старым IP удерживаются ещё какое-то время, чтобы уже открытые соединения не ушли внезапно в VPN.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .disabled(!client.canModify)
 
-            Section("规则") {
+            Section("Правила") {
                 HStack {
-                    Button("导入…", action: importConfig)
-                    Button("导出…", action: exportConfig)
+                    Button("Импортировать…", action: importConfig)
+                    Button("Экспортировать…", action: exportConfig)
                 }
-                Text("导入支持本 App 导出的 JSON，也支持每行一个 IP / 网段 / 域名的纯文本。已存在的目标会跳过。")
+                Text("Импортируется JSON, экспортированный этим приложением, или обычный текст: по одному IP / подсети / домену в строке. Уже существующие адреса пропускаются.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .disabled(!client.canModify)
 
-            Section("关于") {
-                LabeledContent("版本", value: Self.versionText)
-                LabeledContent("开发者", value: "Chongqing Hyperits Network Technology Co., Ltd.")
-                LabeledContent("隐私政策") {
-                    Link("查看", destination: Self.privacyPolicyURL)
+            Section("О программе") {
+                LabeledContent("Версия", value: Self.versionText)
+                LabeledContent("Разработчик", value: "Chongqing Hyperits Network Technology Co., Ltd.")
+                LabeledContent("Политика конфиденциальности") {
+                    Link("Открыть", destination: Self.privacyPolicyURL)
                 }
             }
 
-            Section("后台服务") {
+            Section("Фоновая служба") {
                 HStack(spacing: 12) {
                     HelperIconImage()
                         .frame(width: 48, height: 48)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("MacOSRoute 后台服务").font(.headline)
-                        Text("以 root 身份运行，监听网络变化并维护路由。在“系统设置 → 通用 → 登录项与扩展”中显示为 MacOSRoute。")
+                        Text("Фоновая служба MacOSRoute").font(.headline)
+                        Text("Работает от имени root, отслеживает изменения сети и поддерживает маршруты. В «Системные настройки → Основные → Объекты входа и расширения» отображается как MacOSRoute.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
-                LabeledContent("状态", value: statusText)
-                LabeledContent("App 需要的版本", value: RouteConstants.helperVersion)
-                LabeledContent("配置目录", value: RouteConstants.supportDirectory)
-                LabeledContent("日志", value: RouteConstants.helperLogPath)
+                LabeledContent("Состояние", value: statusText)
+                LabeledContent("Требуемая версия", value: RouteConstants.helperVersion)
+                LabeledContent("Папка настроек", value: RouteConstants.supportDirectory)
+                LabeledContent("Журнал", value: RouteConstants.helperLogPath)
                 HStack {
-                    Button(client.isInstalled ? "重新安装" : "安装") { client.installHelper() }
-                    Button("卸载…", role: .destructive) { confirmUninstall = true }
+                    Button(client.isInstalled ? "Переустановить" : "Установить") { client.installHelper() }
+                    Button("Удалить…", role: .destructive) { confirmUninstall = true }
                         .disabled(!client.isInstalled)
                 }
                 .disabled(client.isBusy)
@@ -102,10 +102,10 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .onAppear { customServersText = config.customDNSServers.joined(separator: ", ") }
         .onChange(of: config.customDNSServers) { _, servers in customServersText = servers.joined(separator: ", ") }
-        .confirmationDialog("卸载后台服务？", isPresented: $confirmUninstall) {
-            Button("删除已添加的路由并卸载", role: .destructive) { client.uninstallHelper() }
+        .confirmationDialog("Удалить фоновую службу?", isPresented: $confirmUninstall) {
+            Button("Удалить добавленные маршруты и службу", role: .destructive) { client.uninstallHelper() }
         } message: {
-            Text("卸载后路由规则不再生效。规则配置会保留，重新安装即可恢复。")
+            Text("После удаления правила маршрутов перестанут действовать. Сами правила сохранятся — после повторной установки всё восстановится.")
         }
     }
 
@@ -121,11 +121,11 @@ struct SettingsView: View {
     private var dnsModeHelp: String {
         switch config.dnsMode {
         case .physical:
-            return "经由物理网卡向当前网络的 DNS 查询，查询失败时改用公共 DNS。能绕过 VPN 的 DNS 和 Surge / Clash 的 Fake-IP，得到与物理网络匹配的 IP。"
+            return "Запрос к DNS текущей сети через физический интерфейс, при ошибке — к публичному DNS. Обходит DNS от VPN и Fake-IP от Surge / Clash и даёт IP, подходящие для физической сети."
         case .system:
-            return "使用系统解析器。开启 VPN 或代理增强模式时，可能得到海外节点 IP 或 Fake-IP（198.18.x.x，会被自动忽略）。"
+            return "Системный резолвер. При включённом VPN или расширенном режиме прокси может вернуть IP зарубежного узла или Fake-IP (198.18.x.x — такие игнорируются автоматически)."
         case .custom:
-            return "经由物理网卡向指定的 DNS 服务器查询。按回车保存。"
+            return "Запрос к указанным DNS-серверам через физический интерфейс. Нажмите Return, чтобы сохранить."
         }
     }
 
@@ -139,11 +139,11 @@ struct SettingsView: View {
 
     private var statusText: String {
         switch client.status {
-        case .checking: return "检查中"
-        case .notInstalled: return "未安装"
-        case .running: return "运行中（\(client.state?.version ?? "")）"
-        case .outdated(let v): return "需要更新（已安装 \(v)）"
-        case .unreachable(let msg): return "无法连接：\(msg)"
+        case .checking: return "Проверка…"
+        case .notInstalled: return "Не установлена"
+        case .running: return "Работает (\(client.state?.version ?? ""))"
+        case .outdated(let v): return "Нужно обновить (установлена: \(v))"
+        case .unreachable(let msg): return "Нет связи: \(msg)"
         }
     }
 
@@ -156,7 +156,7 @@ struct SettingsView: View {
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         } catch {
-            client.alertMessage = "设置登录启动失败: \(error.localizedDescription)"
+            client.alertMessage = "Не удалось настроить запуск при входе: \(error.localizedDescription)"
             launchAtLogin = SMAppService.mainApp.status == .enabled
         }
     }
@@ -172,7 +172,7 @@ struct SettingsView: View {
         do {
             try data.write(to: url)
         } catch {
-            client.alertMessage = "导出失败: \(error.localizedDescription)"
+            client.alertMessage = "Не удалось экспортировать: \(error.localizedDescription)"
         }
     }
 
@@ -191,7 +191,7 @@ struct SettingsView: View {
         } else {
             let invalid = client.addTargets(from: String(decoding: data, as: UTF8.self))
             if !invalid.isEmpty {
-                client.alertMessage = "以下内容无法识别，已跳过：\(invalid.prefix(20).joined(separator: ", "))"
+                client.alertMessage = "Не распознано (или подсеть шире /8), пропущено: \(invalid.prefix(20).joined(separator: ", "))"
             }
         }
     }

@@ -2,9 +2,9 @@
 import AppKit
 import SwiftUI
 
-/// 仅 Debug 构建：生成发布截图。
-/// 用法：MACOSROUTE_DEV_AGENT=1 MACOSROUTE_SCREENSHOT_DIR=<目录> MacOSRoute.app/Contents/MacOS/MacOSRoute
-/// App 会依次切换各页面和浅色 / 深色外观，截取自身主窗口（无需屏幕录制权限），完成后退出。
+/// Только для Debug-сборки: создаёт скриншоты для публикации.
+/// Использование: MACOSROUTE_DEV_AGENT=1 MACOSROUTE_SCREENSHOT_DIR=<папка> MacOSRoute.app/Contents/MacOS/MacOSRoute
+/// Приложение по очереди переключает страницы и светлое / тёмное оформление, снимает своё главное окно (разрешение на запись экрана не нужно) и завершается.
 @MainActor
 enum ScreenshotMode {
     private static var started = false

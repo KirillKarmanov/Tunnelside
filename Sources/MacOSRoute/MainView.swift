@@ -26,15 +26,15 @@ struct MainView: View {
         #if DEBUG
         .onAppear { ScreenshotMode.startIfRequested(navigation: navigation) }
         #endif
-        .alert("提示", isPresented: Binding(get: { client.alertMessage != nil }, set: { if !$0 { client.alertMessage = nil } })) {
-            Button("好") { client.alertMessage = nil }
+        .alert("Внимание", isPresented: Binding(get: { client.alertMessage != nil }, set: { if !$0 { client.alertMessage = nil } })) {
+            Button("ОК") { client.alertMessage = nil }
         } message: {
             Text(client.alertMessage ?? "")
         }
     }
 }
 
-/// 窗口顶部：Helper 状态、当前物理网关与全局开关
+/// Верх окна: состояние Helper, текущий физический шлюз и общий переключатель
 struct HelperBanner: View {
     @EnvironmentObject private var client: HelperClient
 
@@ -43,42 +43,42 @@ struct HelperBanner: View {
             switch client.status {
             case .checking:
                 ProgressView().controlSize(.small)
-                Text("正在连接后台服务…")
+                Text("Подключение к фоновой службе…")
                 Spacer()
             case .notInstalled:
                 helperIcon
-                Text("需要安装后台服务才能修改系统路由，只需输入一次管理员密码。")
+                Text("Чтобы менять системные маршруты, установите фоновую службу — пароль администратора понадобится один раз.")
                 Spacer()
-                installButton("安装后台服务")
+                installButton("Установить фоновую службу")
             case .outdated(let installed):
                 helperIcon
-                Text("后台服务版本 \(installed) 需要更新到 \(RouteConstants.helperVersion)，更新前无法修改规则。")
+                Text("Фоновую службу нужно обновить (установлена: \(installed), нужна: \(RouteConstants.helperVersion)). До обновления правила менять нельзя.")
                 Spacer()
-                installButton("更新后台服务")
+                installButton("Обновить фоновую службу")
             case .unreachable(let message):
                 Image(systemName: "xmark.octagon").foregroundStyle(.red)
-                Text("无法连接后台服务：\(message)").lineLimit(1)
+                Text("Нет связи с фоновой службой: \(message)").lineLimit(1)
                 Spacer()
-                installButton("重新安装")
+                installButton("Переустановить")
             case .running:
                 GatewayLabel()
                 Spacer()
                 if let date = client.state?.lastApplyAt {
-                    Text("同步于 \(date.formatted(date: .omitted, time: .standard))")
+                    Text("Синхронизировано в \(date.formatted(date: .omitted, time: .standard))")
                         .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
                 Toggle(isOn: Binding(get: { !client.isPaused }, set: { client.setPaused(!$0) })) {
-                    Text(client.isPaused ? "已暂停" : "生效中")
+                    Text(client.isPaused ? "На паузе" : "Работает")
                 }
                 .toggleStyle(.switch)
-                .help("暂停会移除所有由 MacOSRoute 添加的路由，恢复后重新应用")
+                .help("Пауза убирает все маршруты, добавленные MacOSRoute; при продолжении они применяются заново")
                 Button {
                     client.reapply()
                 } label: {
-                    Label("重新应用", systemImage: "arrow.clockwise")
+                    Label("Применить заново", systemImage: "arrow.clockwise")
                 }
-                .help("重新探测网关、重新解析域名并校验全部路由")
+                .help("Заново определить шлюз, обновить адреса доменов и проверить все маршруты")
                 .disabled(client.isBusy)
             }
         }
@@ -106,12 +106,12 @@ struct GatewayLabel: View {
     var body: some View {
         if let gw = client.state?.gateway {
             Label {
-                Text("物理网关 ") + Text(gw.router).monospaced().bold() + Text("  ·  \(gw.interface)").foregroundColor(.secondary)
+                Text("Физический шлюз ") + Text(gw.router).monospaced().bold() + Text("  ·  \(gw.interface)").foregroundColor(.secondary)
             } icon: {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             }
         } else {
-            Label("未检测到物理网关，现有路由保持不变", systemImage: "wifi.exclamationmark")
+            Label("Физический шлюз не найден, текущие маршруты не меняются", systemImage: "wifi.exclamationmark")
                 .foregroundStyle(.orange)
         }
     }

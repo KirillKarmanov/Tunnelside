@@ -1,12 +1,12 @@
 import Foundation
 import RouteShared
 
-/// 路由下一跳
+/// Следующий переход маршрута
 public struct NextHop: Codable, Equatable, Hashable, Sendable {
-    /// 网关 IP；为 nil 时表示直接走 interface（接口路由，如 VPN 隧道）
+    /// IP шлюза; nil — маршрут напрямую через interface (маршрут интерфейса, например VPN-туннель)
     public var gateway: String?
     public var interface: String?
-    /// 期望的本机源地址，用于发现网络切换后残留旧地址的路由
+    /// Ожидаемый локальный адрес источника — чтобы находить маршруты, оставшиеся со старым адресом после смены сети
     public var localAddress: String?
 
     public init(gateway: String?, interface: String?, localAddress: String? = nil) {
@@ -19,12 +19,12 @@ public struct NextHop: Codable, Equatable, Hashable, Sendable {
         switch (gateway, interface) {
         case let (g?, i?): return "\(g) (\(i))"
         case let (g?, nil): return g
-        case let (nil, i?): return "接口 \(i)"
+        case let (nil, i?): return "интерфейс \(i)"
         default: return "—"
         }
     }
 
-    /// 内核中的路由是否已经符合该下一跳
+    /// Соответствует ли маршрут в ядре уже этому следующему переходу
     public func isSatisfied(by entry: RouteEntry) -> Bool {
         if let gateway {
             guard entry.gateway == gateway else { return false }
@@ -37,7 +37,7 @@ public struct NextHop: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// 引擎对操作系统的全部依赖，便于在测试中替换为模拟实现
+/// Все зависимости движка от ОС — чтобы в тестах подменять их имитацией
 public protocol RouteSystem: AnyObject {
     func networkSnapshot(preferredInterface: String) -> GatewayDetector.Snapshot
     func routingTable() -> [RouteEntry]
@@ -49,10 +49,10 @@ public protocol RouteSystem: AnyObject {
 public final class LiveRouteSystem: RouteSystem {
     private let dryRun: Bool
     private let lock = NSLock()
-    /// dryRun 模式下模拟添加的路由
+    /// Маршруты, «добавленные» в режиме dryRun
     private var simulated: [String: RouteEntry] = [:]
 
-    /// dryRun 为 true 时不执行 route 命令（非 root 调试）
+    /// При dryRun = true команда route не выполняется (отладка без root)
     public init(dryRun: Bool) {
         self.dryRun = dryRun
     }

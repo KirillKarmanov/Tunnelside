@@ -1,7 +1,7 @@
 import Foundation
 import RouteShared
 
-/// 通过 macOS 管理员授权对话框安装 / 卸载 root LaunchDaemon
+/// Установка / удаление root LaunchDaemon через окно запроса пароля администратора macOS
 enum HelperInstaller {
     enum InstallError: LocalizedError {
         case cancelled
@@ -10,8 +10,8 @@ enum HelperInstaller {
 
         var errorDescription: String? {
             switch self {
-            case .cancelled: return "用户取消了授权"
-            case .missingResource(let name): return "App 包中缺少 \(name)，请用 Xcode 的 MacOSRoute Scheme 构建"
+            case .cancelled: return "Пользователь отменил авторизацию"
+            case .missingResource(let name): return "В пакете приложения нет \(name) — соберите его скриптом scripts/build-spm.sh"
             case .failed(let message): return message
             }
         }
@@ -46,7 +46,7 @@ enum HelperInstaller {
         try await runPrivileged(script)
     }
 
-    /// 卸载 Helper，保留 /Library/Application Support/MacOSRoute 中的规则配置
+    /// Удалить службу, сохранив правила в /Library/Application Support/MacOSRoute
     static func uninstall() async throws {
         let script = """
         \(legacyCleanupScript)
@@ -56,7 +56,7 @@ enum HelperInstaller {
         try await runPrivileged(script)
     }
 
-    /// 停止并删除旧标识的 Helper。规则配置目录与标识无关，新 Helper 会直接接管。
+    /// Остановить и удалить службу со старым идентификатором. Папка с правилами от идентификатора не зависит — новая служба подхватит её сразу.
     private static var legacyCleanupScript: String {
         RouteConstants.legacyHelperLabels.map { label in
             """
@@ -66,7 +66,7 @@ enum HelperInstaller {
         }.joined(separator: "\n")
     }
 
-    /// 是否仍安装着旧标识的 Helper
+    /// Установлена ли ещё служба со старым идентификатором
     static var legacyHelperInstalled: Bool {
         RouteConstants.legacyHelperLabels.contains { FileManager.default.fileExists(atPath: "/Library/LaunchDaemons/\($0).plist") }
     }
@@ -75,7 +75,7 @@ enum HelperInstaller {
         let escaped = shellScript
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
-        let appleScript = "do shell script \"\(escaped)\" with prompt \"MacOSRoute 需要安装后台服务以管理系统路由。\" with administrator privileges"
+        let appleScript = "do shell script \"\(escaped)\" with prompt \"MacOSRoute устанавливает фоновую службу для управления маршрутами.\" with administrator privileges"
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()
@@ -102,7 +102,7 @@ enum HelperInstaller {
         }
     }
 
-    /// shell 单引号转义
+    /// Экранирование одинарных кавычек для shell
     private static func q(_ s: String) -> String {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }

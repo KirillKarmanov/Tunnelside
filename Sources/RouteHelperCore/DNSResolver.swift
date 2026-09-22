@@ -11,20 +11,20 @@ public enum ResolveError: Error, Equatable, Sendable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .failed(let msg): return "解析失败: \(msg)"
-        case .timeout: return "解析超时"
-        case .notFound: return "域名不存在或没有 IPv4 地址"
-        case .fakeIP(let ips): return "解析到代理 Fake-IP（\(ips.first ?? "")），请在设置中使用物理网络 DNS"
-        case .noServers: return "没有可用的 DNS 服务器"
+        case .failed(let msg): return "Не удалось разрешить домен: \(msg)"
+        case .timeout: return "Тайм-аут разрешения домена"
+        case .notFound: return "Домен не существует или у него нет IPv4-адресов"
+        case .fakeIP(let ips): return "Домен разрешился в Fake-IP прокси (\(ips.first ?? "")) — укажите в настройках DNS физической сети"
+        case .noServers: return "Нет доступных DNS-серверов"
         }
     }
 }
 
 public enum DNSResolver {
-    /// 物理网络 DNS 不可达时（例如非 root 进程受“本地网络”隐私限制）经由物理网卡使用的公共 DNS
+    /// Публичный DNS через физический интерфейс — если DNS физической сети недоступен (например, процесс не под root ограничен приватностью «Локальная сеть»)
     public static let fallbackServers = ["1.1.1.1", "8.8.8.8", "9.9.9.9"]
 
-    /// 按模式解析域名的 IPv4 地址，并过滤不可路由 / Fake-IP 结果
+    /// Разрешает IPv4-адреса домена в выбранном режиме и отбрасывает немаршрутизируемые / Fake-IP результаты
     public static func resolve(_ domain: String, mode: DNSMode, customServers: [String], physical: NetworkInterfaceInfo?) -> Result<[String], ResolveError> {
         let raw: Result<[String], ResolveError>
         switch mode {
@@ -52,7 +52,7 @@ public enum DNSResolver {
         return .success(real)
     }
 
-    /// 系统解析器（带超时，避免断网时 getaddrinfo 长时间阻塞）
+    /// Системный резолвер (с тайм-аутом, чтобы getaddrinfo не зависал надолго без сети)
     public static func resolveSystem(_ host: String, timeout: TimeInterval = 8) -> Result<[String], ResolveError> {
         final class Box: @unchecked Sendable { var result: Result<[String], ResolveError>? }
         let box = Box()
@@ -93,7 +93,7 @@ public enum DNSResolver {
     }
 }
 
-/// 最小 DNS 客户端：UDP A 记录查询，socket 绑定到指定网卡（IP_BOUND_IF），不受 VPN 默认路由影响
+/// Минимальный DNS-клиент: UDP-запрос A-записи, сокет привязан к заданному интерфейсу (IP_BOUND_IF) и не зависит от маршрута VPN по умолчанию
 public enum DNSClient {
     public static func resolveA(_ name: String, servers: [String], interface: String?, timeout: TimeInterval = 2.5) -> Result<[String], ResolveError> {
         guard !servers.isEmpty else { return .failure(.noServers) }
@@ -109,9 +109,9 @@ public enum DNSClient {
     }
 
     static func query(_ name: String, server: String, interface: String?, timeout: TimeInterval) -> Result<[String], ResolveError> {
-        guard let serverValue = TargetParser.ipv4Value(server) else { return .failure(.failed("无效的 DNS 服务器 \(server)")) }
+        guard let serverValue = TargetParser.ipv4Value(server) else { return .failure(.failed("Некорректный DNS-сервер \(server)")) }
         let id = UInt16.random(in: 1...UInt16.max)
-        guard let packet = DNSMessage.query(id: id, name: name) else { return .failure(.failed("无效的域名")) }
+        guard let packet = DNSMessage.query(id: id, name: name) else { return .failure(.failed("Некорректный домен")) }
 
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return .failure(.failed(String(cString: strerror(errno)))) }
@@ -119,7 +119,7 @@ public enum DNSClient {
 
         if let interface {
             var index = if_nametoindex(interface)
-            guard index != 0 else { return .failure(.failed("网卡 \(interface) 不存在")) }
+            guard index != 0 else { return .failure(.failed("Интерфейс \(interface) не существует")) }
             setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &index, socklen_t(MemoryLayout<UInt32>.size))
         }
 
@@ -147,7 +147,7 @@ public enum DNSClient {
             let n = recv(fd, &response, response.count, 0)
             guard n > 0 else { return .failure(.failed(String(cString: strerror(errno)))) }
             let result = DNSMessage.parseA(Array(response[0..<n]), expectedID: id)
-            if case .failure(.failed("ID 不匹配")) = result { continue }
+            if case .failure(.failed("ID не совпадает")) = result { continue }
             return result
         }
     }
@@ -167,23 +167,23 @@ public enum DNSMessage {
     }
 
     public static func parseA(_ data: [UInt8], expectedID: UInt16) -> Result<[String], ResolveError> {
-        guard data.count >= 12 else { return .failure(.failed("响应过短")) }
+        guard data.count >= 12 else { return .failure(.failed("Слишком короткий ответ")) }
         let id = UInt16(data[0]) << 8 | UInt16(data[1])
-        guard id == expectedID else { return .failure(.failed("ID 不匹配")) }
+        guard id == expectedID else { return .failure(.failed("ID не совпадает")) }
         let flags = UInt16(data[2]) << 8 | UInt16(data[3])
-        guard flags & 0x8000 != 0 else { return .failure(.failed("不是 DNS 响应")) }
+        guard flags & 0x8000 != 0 else { return .failure(.failed("Это не DNS-ответ")) }
         switch flags & 0x000F {
         case 0: break
         case 3: return .failure(.notFound)
-        case let rcode: return .failure(.failed("DNS 错误码 \(rcode)"))
+        case let rcode: return .failure(.failed("Код ошибки DNS \(rcode)"))
         }
-        if flags & 0x0200 != 0 { return .failure(.failed("响应被截断")) }
+        if flags & 0x0200 != 0 { return .failure(.failed("Ответ обрезан")) }
 
         let qdcount = Int(UInt16(data[4]) << 8 | UInt16(data[5]))
         let ancount = Int(UInt16(data[6]) << 8 | UInt16(data[7]))
         var offset = 12
         for _ in 0..<qdcount {
-            guard let next = skipName(data, offset), next + 4 <= data.count else { return .failure(.failed("响应格式错误")) }
+            guard let next = skipName(data, offset), next + 4 <= data.count else { return .failure(.failed("Неверный формат ответа")) }
             offset = next + 4
         }
         var ips: [String] = []
@@ -203,7 +203,7 @@ public enum DNSMessage {
         return ips.isEmpty ? .failure(.notFound) : .success(ips)
     }
 
-    /// 跳过（可能压缩的）域名，返回其后的偏移
+    /// Пропускает (возможно, сжатое) доменное имя и возвращает смещение после него
     static func skipName(_ data: [UInt8], _ start: Int) -> Int? {
         var offset = start
         while offset < data.count {

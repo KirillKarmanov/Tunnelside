@@ -35,7 +35,7 @@ struct MacOSRouteApp: App {
     }
 }
 
-/// 菜单栏图标；同时保存 openWindow，供 AppDelegate 等非视图代码打开主窗口
+/// Иконка в строке меню; заодно сохраняет openWindow, чтобы главное окно мог открыть код вне вью (например, AppDelegate)
 private struct MenuBarLabel: View {
     let symbol: String
     @Environment(\.openWindow) private var openWindow
@@ -47,7 +47,7 @@ private struct MenuBarLabel: View {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// 从访达、Spotlight 或 Dock 再次打开 App 时显示主窗口
+    /// Показывает главное окно при повторном открытии приложения из Finder, Spotlight или Dock
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         MainActor.assumeIsolated { AppWindow.showMain() }
         return false
@@ -59,9 +59,9 @@ enum AppWindow {
     static let mainID = "main"
     static var openWindowAction: OpenWindowAction?
 
-    /// 打开并前置主窗口。
-    /// 菜单栏 App（LSUIElement）在 macOS 14+ 的协作式激活下，仅调用 openWindow 窗口会停留在其他 App 之后，
-    /// 因此先切换为普通 App，再显式前置窗口。
+    /// Открывает главное окно и выводит его на передний план.
+    /// У приложения строки меню (LSUIElement) в macOS 14+ с кооперативной активацией одного openWindow мало — окно остаётся позади других приложений,
+    /// поэтому сначала переключаемся в обычное приложение, затем явно выводим окно вперёд.
     static func showMain(_ openWindow: OpenWindowAction? = nil) {
         if let openWindow { openWindowAction = openWindow }
         NSApp.setActivationPolicy(.regular)
@@ -72,7 +72,7 @@ enum AppWindow {
             openWindowAction?(id: mainID)
         }
         NSApp.activate()
-        // 新建窗口在下一轮 run loop 才出现
+        // Новое окно появляется только на следующем проходе run loop
         DispatchQueue.main.async {
             if let window = mainWindow { bringToFront(window) }
             NSApp.activate()
@@ -86,7 +86,7 @@ enum AppWindow {
     }
 
     static func mainWindowDidDisappear() {
-        // 主窗口关闭后恢复为纯菜单栏 App（不占 Dock）
+        // После закрытия главного окна возвращаемся к режиму строки меню (без значка в Dock)
         DispatchQueue.main.async {
             if mainWindow?.isVisible != true {
                 NSApp.setActivationPolicy(.accessory)

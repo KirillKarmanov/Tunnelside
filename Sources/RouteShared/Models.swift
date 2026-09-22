@@ -1,30 +1,30 @@
 import Foundation
 
-/// 规则的出口
+/// Выход для правила
 public enum RouteVia: Codable, Hashable, Sendable {
-    /// 自动选择的物理网卡网关（绕过 VPN）
+    /// Физический шлюз, выбранный автоматически (мимо VPN)
     case physical
-    /// 指定网卡：有网关时经由其网关，否则（如 VPN 的 utun）直接走该接口
+    /// Заданный интерфейс: через его шлюз, если он есть, иначе (например, utun у VPN) напрямую через интерфейс
     case interface(String)
-    /// 指定网关 IP
+    /// IP заданного шлюза
     case gateway(String)
 
     public var label: String {
         switch self {
-        case .physical: return "物理网关"
-        case .interface(let name): return "网卡 \(name)"
-        case .gateway(let ip): return "网关 \(ip)"
+        case .physical: return "Физический шлюз"
+        case .interface(let name): return "Интерфейс \(name)"
+        case .gateway(let ip): return "Шлюз \(ip)"
         }
     }
 }
 
 public struct RouteRule: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
-    /// IP、CIDR 或域名
+    /// IP, CIDR или домен
     public var target: String
     public var enabled: Bool
     public var note: String
-    /// 分组名，空字符串表示未分组
+    /// Имя группы; пустая строка — без группы
     public var group: String
     public var via: RouteVia
 
@@ -49,18 +49,18 @@ public struct RouteRule: Codable, Identifiable, Hashable, Sendable {
 }
 
 public enum DNSMode: String, Codable, CaseIterable, Sendable {
-    /// 通过物理网卡向该网络的 DNS 服务器查询（绕过 VPN / 代理的 DNS 与 Fake-IP）
+    /// Запрос к DNS-серверу сети через физический интерфейс (мимо DNS и Fake-IP у VPN / прокси)
     case physical
-    /// 使用系统解析器（可能被 VPN / 代理接管）
+    /// Системный резолвер (его может перехватывать VPN / прокси)
     case system
-    /// 通过物理网卡向自定义 DNS 服务器查询
+    /// Запрос к своему DNS-серверу через физический интерфейс
     case custom
 
     public var label: String {
         switch self {
-        case .physical: return "物理网络 DNS（推荐）"
-        case .system: return "系统 DNS"
-        case .custom: return "自定义 DNS 服务器"
+        case .physical: return "DNS физической сети (рекомендуется)"
+        case .system: return "Системный DNS"
+        case .custom: return "Свой DNS-сервер"
         }
     }
 }
@@ -69,17 +69,17 @@ public struct HelperConfig: Codable, Equatable, Sendable {
     public static let automaticInterface = "auto"
 
     public var rules: [RouteRule]
-    /// 物理网关使用的网卡："auto" 或 BSD 接口名（如 en0）
+    /// Интерфейс физического шлюза: "auto" или BSD-имя интерфейса (например, en0)
     public var interface: String
-    /// 域名重新解析的间隔（分钟）
+    /// Интервал обновления адресов доменов (минуты)
     public var dnsRefreshMinutes: Int
     public var dnsMode: DNSMode
     public var customDNSServers: [String]
-    /// 域名解析结果变化后，旧 IP 继续保留路由的小时数（避免 CDN 轮换导致已有连接中断）
+    /// Сколько часов удерживается маршрут на старый IP после смены адресов домена (чтобы ротация CDN не рвала открытые соединения)
     public var dnsRetentionHours: Int
-    /// 暂停：移除全部由 MacOSRoute 添加的路由，但保留规则
+    /// Пауза: удалить все маршруты, добавленные MacOSRoute, но сохранить правила
     public var paused: Bool
-    /// 配置版本号，用于检测并发修改（多个窗口或多个 App 实例）
+    /// Номер версии конфигурации — для обнаружения одновременных изменений (несколько окон или экземпляров приложения)
     public var revision: Int
 
     public init(rules: [RouteRule] = [], interface: String = HelperConfig.automaticInterface, dnsRefreshMinutes: Int = 10,
@@ -107,7 +107,7 @@ public struct HelperConfig: Codable, Equatable, Sendable {
         revision = try c.decodeIfPresent(Int.self, forKey: .revision) ?? 0
     }
 
-    /// 修正越界值
+    /// Исправить значения вне допустимого диапазона
     public mutating func sanitize() {
         dnsRefreshMinutes = min(max(1, dnsRefreshMinutes), 1440)
         dnsRetentionHours = min(max(0, dnsRetentionHours), 168)
@@ -123,7 +123,7 @@ public struct HelperConfig: Codable, Equatable, Sendable {
     }
 }
 
-/// 物理网关（默认出口）
+/// Физический шлюз (выход по умолчанию)
 public struct GatewayInfo: Codable, Equatable, Sendable {
     public var interface: String
     public var router: String
@@ -136,14 +136,14 @@ public struct GatewayInfo: Codable, Equatable, Sendable {
     }
 }
 
-/// 系统中拥有 IPv4 配置的网络接口
+/// Сетевой интерфейс системы с IPv4-конфигурацией
 public struct NetworkInterfaceInfo: Codable, Equatable, Hashable, Sendable {
     public var name: String
     public var router: String?
     public var localAddress: String?
     public var subnetMask: String?
     public var dnsServers: [String]
-    /// VPN 隧道等虚拟接口
+    /// Виртуальный интерфейс (туннель VPN и т. п.)
     public var isVirtual: Bool
 
     public init(name: String, router: String?, localAddress: String?, subnetMask: String?, dnsServers: [String], isVirtual: Bool) {
@@ -157,16 +157,16 @@ public struct NetworkInterfaceInfo: Codable, Equatable, Hashable, Sendable {
 }
 
 public struct RuleStatus: Codable, Equatable, Sendable {
-    /// 规则对应的地址（主机 IP 或 CIDR），包含保留的旧解析结果
+    /// Адреса правила (IP хоста или CIDR), включая удерживаемые старые адреса домена
     public var addresses: [String]
-    /// 当前确认已按期望出口生效的地址
+    /// Адреса, для которых маршрут через нужный выход сейчас подтверждён
     public var appliedAddresses: [String]
-    /// 来自旧解析结果、仍在保留期内的地址
+    /// Старые адреса домена, которые ещё удерживаются
     public var retainedAddresses: [String]
     public var error: String?
     public var warning: String?
     public var resolvedAt: Date?
-    /// 实际使用的下一跳描述，如 "192.168.1.1 (en0)"
+    /// Фактический следующий узел, например "192.168.1.1 (en0)"
     public var nextHop: String?
 
     public init(addresses: [String] = [], appliedAddresses: [String] = [], retainedAddresses: [String] = [],
@@ -181,7 +181,7 @@ public struct RuleStatus: Codable, Equatable, Sendable {
     }
 }
 
-/// Helper 当前维护的一条路由
+/// Маршрут, который сейчас поддерживает фоновая служба
 public struct ManagedRoute: Codable, Equatable, Hashable, Sendable {
     public var address: String
     public var gateway: String?
@@ -215,7 +215,7 @@ public struct HelperState: Codable, Sendable {
     public var config: HelperConfig
     public var gateway: GatewayInfo?
     public var interfaces: [NetworkInterfaceInfo]
-    /// key 为 RouteRule.id.uuidString
+    /// Ключ — RouteRule.id.uuidString
     public var statuses: [String: RuleStatus]
     public var managedRoutes: [ManagedRoute]
     public var lastApplyAt: Date?
