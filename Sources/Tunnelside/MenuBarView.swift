@@ -140,7 +140,7 @@ struct MenuBarView: View {
     }
 
     private func openMainWindow() {
-        dismiss() // Сначала закрываем панель строки меню, чтобы она не заслоняла главное окно и не забирала фокус
+        dismiss() // Close the menu bar panel first so it doesn't cover the main window or steal focus
         AppWindow.showMain(openWindow)
     }
 

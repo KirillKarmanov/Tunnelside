@@ -1,9 +1,9 @@
 import Testing
 
-// В Command Line Tools нет XCTest, есть только Swift Testing.
-// Прослойка сохраняет привычные XCTAssert*, чтобы тесты не переписывать построчно.
+// Command Line Tools have no XCTest, only Swift Testing.
+// This shim keeps the familiar XCTAssert* so the tests don't have to be rewritten line by line.
 
-/// Пустой Comment в Swift Testing из Command Line Tools роняет процесс (SIGTRAP), поэтому пустое сообщение → nil.
+/// An empty Comment crashes the process (SIGTRAP) in Swift Testing from Command Line Tools, so an empty message becomes nil.
 private func note(_ message: String) -> Comment? {
     message.isEmpty ? nil : Comment(rawValue: message)
 }

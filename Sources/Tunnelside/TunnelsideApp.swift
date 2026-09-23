@@ -9,7 +9,7 @@ struct TunnelsideApp: App {
     @StateObject private var navigation: AppNavigation
 
     init() {
-        // До создания первых экранов: все тексты интерфейса берутся через L(...)
+        // Before the first views are created: all interface texts go through L(...)
         AppLanguage.current = .system
         _client = StateObject(wrappedValue: HelperClient())
         _navigation = StateObject(wrappedValue: AppNavigation())
@@ -42,7 +42,7 @@ struct TunnelsideApp: App {
     }
 }
 
-/// Иконка в строке меню; заодно сохраняет openWindow, чтобы главное окно мог открыть код вне вью (например, AppDelegate)
+/// Menu bar icon; also keeps openWindow so code outside views (for example, AppDelegate) can open the main window
 private struct MenuBarLabel: View {
     let symbol: String
     @Environment(\.openWindow) private var openWindow
@@ -54,7 +54,7 @@ private struct MenuBarLabel: View {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// Показывает главное окно при повторном открытии приложения из Finder, Spotlight или Dock
+    /// Shows the main window when the app is reopened from Finder, Spotlight or the Dock
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         MainActor.assumeIsolated { AppWindow.showMain() }
         return false
@@ -66,9 +66,9 @@ enum AppWindow {
     static let mainID = "main"
     static var openWindowAction: OpenWindowAction?
 
-    /// Открывает главное окно и выводит его на передний план.
-    /// У приложения строки меню (LSUIElement) в macOS 14+ с кооперативной активацией одного openWindow мало — окно остаётся позади других приложений,
-    /// поэтому сначала переключаемся в обычное приложение, затем явно выводим окно вперёд.
+    /// Opens the main window and brings it to the front.
+    /// For a menu bar app (LSUIElement) on macOS 14+ with cooperative activation, openWindow alone is not enough — the window stays behind other apps,
+    /// so we first switch to a regular app, then explicitly bring the window forward.
     static func showMain(_ openWindow: OpenWindowAction? = nil) {
         if let openWindow { openWindowAction = openWindow }
         NSApp.setActivationPolicy(.regular)
@@ -79,7 +79,7 @@ enum AppWindow {
             openWindowAction?(id: mainID)
         }
         NSApp.activate()
-        // Новое окно появляется только на следующем проходе run loop
+        // The new window appears only on the next run loop pass
         DispatchQueue.main.async {
             if let window = mainWindow { bringToFront(window) }
             NSApp.activate()
@@ -93,7 +93,7 @@ enum AppWindow {
     }
 
     static func mainWindowDidDisappear() {
-        // После закрытия главного окна возвращаемся к режиму строки меню (без значка в Dock)
+        // After the main window closes, go back to menu bar mode (no Dock icon)
         DispatchQueue.main.async {
             if mainWindow?.isVisible != true {
                 NSApp.setActivationPolicy(.accessory)

@@ -1,3 +1,3 @@
-/* Русские строки Info.plist */
+/* Russian Info.plist strings */
 "NSLocalNetworkUsageDescription" = "Диагностика обращается к DNS-серверу текущей сети, чтобы сравнить адреса домена через VPN и напрямую.";
 "NSHumanReadableCopyright" = "© 2026 Кирилл Карманов. Основано на MacOSRoute © 2026 Chongqing Hyperits Network Technology Co., Ltd.";

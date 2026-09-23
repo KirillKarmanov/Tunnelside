@@ -2,14 +2,14 @@ import Darwin
 import Foundation
 import RouteShared
 
-/// Запись таблицы маршрутов IPv4 ядра
+/// An entry of the kernel IPv4 routing table
 public struct RouteEntry: Equatable, Hashable, Identifiable, Sendable {
     public var destination: String
     public var prefix: Int
-    /// IPv4-шлюз; у прямых / интерфейсных маршрутов nil
+    /// IPv4 gateway; nil for direct / interface routes
     public var gateway: String?
     public var interface: String
-    /// Локальный адрес маршрута (ifa)
+    /// Local address of the route (ifa)
     public var interfaceAddress: String?
     public var flags: Int32
 
@@ -22,7 +22,7 @@ public struct RouteEntry: Equatable, Hashable, Identifiable, Sendable {
         self.flags = flags
     }
 
-    /// Тот же формат, что у адресов правил: хост — "1.2.3.4", подсеть — "10.0.0.0/8"
+    /// Same format as rule addresses: host — "1.2.3.4", subnet — "10.0.0.0/8"
     public var address: String { prefix == 32 ? destination : "\(destination)/\(prefix)" }
     public var id: String { "\(address)|\(gateway ?? "link")|\(interface)|\(flags)" }
 
@@ -34,7 +34,7 @@ public struct RouteEntry: Equatable, Hashable, Identifiable, Sendable {
 
     public var displayDestination: String { prefix == 0 && destination == "0.0.0.0" ? "default" : address }
 
-    /// Строка флагов как в netstat -rn
+    /// Flags string as in netstat -rn
     public var flagString: String {
         let table: [(Int32, Character)] = [
             (RTF_UP, "U"), (RTF_GATEWAY, "G"), (RTF_HOST, "H"), (RTF_REJECT, "R"), (RTF_DYNAMIC, "D"),
@@ -51,7 +51,7 @@ public enum RoutingTable {
         for _ in 0..<3 {
             var length = 0
             guard sysctl(&mib, u_int(mib.count), nil, &length, nil, 0) == 0 else { return [] }
-            length += length / 4 + 1024 // таблица маршрутов может вырасти между двумя вызовами
+            length += length / 4 + 1024 // the routing table may grow between the two calls
             var buffer = [UInt8](repeating: 0, count: length)
             if sysctl(&mib, u_int(mib.count), &buffer, &length, nil, 0) == 0 {
                 return buffer.withUnsafeBytes { parse(UnsafeRawBufferPointer(rebasing: $0[0..<length]), interfaceName: interfaceName) }
@@ -66,7 +66,7 @@ public enum RoutingTable {
         return if_indextoname(UInt32(index), &name) != nil ? String(cString: name) : "if\(index)"
     }
 
-    /// Разбирает последовательность rt_msghdr из ответа NET_RT_DUMP
+    /// Parses a sequence of rt_msghdr from a NET_RT_DUMP response
     public static func parse(_ bytes: UnsafeRawBufferPointer, interfaceName: (UInt16) -> String) -> [RouteEntry] {
         let headerSize = MemoryLayout<rt_msghdr>.size
         var entries: [RouteEntry] = []
@@ -115,21 +115,21 @@ public enum RoutingTable {
         return "\(sa[4]).\(sa[5]).\(sa[6]).\(sa[7])"
     }
 
-    /// sockaddr маски может быть усечён (sa_len < 8) или иметь family 0/255
+    /// The mask sockaddr may be truncated (sa_len < 8) or have family 0/255
     private static func maskPrefix(_ sa: [UInt8]) -> Int {
         var bits = 0
         for i in 4..<8 where i < sa.count { bits += sa[i].nonzeroBitCount }
         return bits
     }
 
-    /// Точное совпадение не-scoped маршрута для адреса; сначала статические маршруты, затем не клонированные
+    /// Exact match of a non-scoped route for an address; static routes first, then non-cloned ones
     public static func exactRoute(for address: String, in entries: [RouteEntry]) -> RouteEntry? {
         let candidates = entries.filter { $0.address == address && !$0.isScoped && !$0.isLinkLayer }
         return candidates.first(where: \.isStatic) ?? candidates.first(where: { !$0.isCloned }) ?? candidates.first
     }
 }
 
-/// Локальный IPv4-адрес интерфейса
+/// Local IPv4 address of an interface
 public struct LocalAddress: Equatable, Sendable {
     public var interface: String
     public var address: String
@@ -165,7 +165,7 @@ public struct LocalAddress: Equatable, Sendable {
 }
 
 public enum RouteAnalyzer {
-    /// Устарел ли статический маршрут через шлюз: шлюз не входит в подсеть ни одного текущего интерфейса или локальный адрес маршрута больше не существует
+    /// Whether a static route via a gateway is stale: the gateway is not in the subnet of any current interface, or the route's local address no longer exists
     public static func staleReason(_ entry: RouteEntry, localAddresses: [LocalAddress]) -> String? {
         guard entry.isStatic, entry.hasGateway, !entry.isScoped, !entry.isCloned, let gateway = entry.gateway else { return nil }
         if let ifa = entry.interfaceAddress, !localAddresses.contains(where: { $0.address == ifa }) {

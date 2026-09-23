@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// Иконка фоновой службы из PNG в Contents/Resources.
-/// Каталог Assets.xcassets компилирует только Xcode, а сборка идёт через `swift build`,
-/// поэтому светлый/тёмный вариант выбираем сами по текущей теме.
+/// Background service icon from PNGs in Contents/Resources.
+/// Only Xcode compiles Assets.xcassets, and the build uses `swift build`,
+/// so the light/dark variant is picked here from the current appearance.
 struct HelperIconImage: View {
     @Environment(\.colorScheme) private var colorScheme
 

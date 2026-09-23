@@ -8,7 +8,7 @@ public enum ResolveError: Error, Equatable, Sendable, CustomStringConvertible {
     case notFound
     case fakeIP([String])
     case noServers
-    /// Ответ на чужой запрос (не совпал ID) — такой ответ пропускается
+    /// A response to someone else's query (ID mismatch) — such a response is skipped
     case idMismatch
 
     public var description: String {
@@ -24,10 +24,10 @@ public enum ResolveError: Error, Equatable, Sendable, CustomStringConvertible {
 }
 
 public enum DNSResolver {
-    /// Публичный DNS через физический интерфейс — если DNS физической сети недоступен (например, процесс не под root ограничен приватностью «Локальная сеть»)
+    /// Public DNS through the physical interface — used when the physical network DNS is unreachable (for example, a non-root process is limited by the Local Network privacy setting)
     public static let fallbackServers = ["1.1.1.1", "8.8.8.8", "9.9.9.9"]
 
-    /// Разрешает IPv4-адреса домена в выбранном режиме и отбрасывает немаршрутизируемые / Fake-IP результаты
+    /// Resolves a domain's IPv4 addresses in the chosen mode and drops unroutable / Fake-IP results
     public static func resolve(_ domain: String, mode: DNSMode, customServers: [String], physical: NetworkInterfaceInfo?) -> Result<[String], ResolveError> {
         let raw: Result<[String], ResolveError>
         switch mode {
@@ -55,7 +55,7 @@ public enum DNSResolver {
         return .success(real)
     }
 
-    /// Системный резолвер (с тайм-аутом, чтобы getaddrinfo не зависал надолго без сети)
+    /// System resolver (with a timeout so getaddrinfo doesn't hang for long without a network)
     public static func resolveSystem(_ host: String, timeout: TimeInterval = 8) -> Result<[String], ResolveError> {
         final class Box: @unchecked Sendable { var result: Result<[String], ResolveError>? }
         let box = Box()
@@ -96,7 +96,7 @@ public enum DNSResolver {
     }
 }
 
-/// Минимальный DNS-клиент: UDP-запрос A-записи, сокет привязан к заданному интерфейсу (IP_BOUND_IF) и не зависит от маршрута VPN по умолчанию
+/// Minimal DNS client: a UDP query for an A record, with the socket bound to the given interface (IP_BOUND_IF), independent of the VPN default route
 public enum DNSClient {
     public static func resolveA(_ name: String, servers: [String], interface: String?, timeout: TimeInterval = 2.5) -> Result<[String], ResolveError> {
         guard !servers.isEmpty else { return .failure(.noServers) }
@@ -206,7 +206,7 @@ public enum DNSMessage {
         return ips.isEmpty ? .failure(.notFound) : .success(ips)
     }
 
-    /// Пропускает (возможно, сжатое) доменное имя и возвращает смещение после него
+    /// Skips a (possibly compressed) domain name and returns the offset after it
     static func skipName(_ data: [UInt8], _ start: Int) -> Int? {
         var offset = start
         while offset < data.count {

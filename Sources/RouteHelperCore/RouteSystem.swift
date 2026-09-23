@@ -1,12 +1,12 @@
 import Foundation
 import RouteShared
 
-/// Следующий переход маршрута
+/// Next hop of a route
 public struct NextHop: Codable, Equatable, Hashable, Sendable {
-    /// IP шлюза; nil — маршрут напрямую через interface (маршрут интерфейса, например VPN-туннель)
+    /// Gateway IP; nil means the route goes directly through interface (an interface route, for example a VPN tunnel)
     public var gateway: String?
     public var interface: String?
-    /// Ожидаемый локальный адрес источника — чтобы находить маршруты, оставшиеся со старым адресом после смены сети
+    /// Expected local source address — to find routes left with the old address after a network change
     public var localAddress: String?
 
     public init(gateway: String?, interface: String?, localAddress: String? = nil) {
@@ -24,7 +24,7 @@ public struct NextHop: Codable, Equatable, Hashable, Sendable {
         }
     }
 
-    /// Соответствует ли маршрут в ядре уже этому следующему переходу
+    /// Whether a kernel route already matches this next hop
     public func isSatisfied(by entry: RouteEntry) -> Bool {
         if let gateway {
             guard entry.gateway == gateway else { return false }
@@ -37,7 +37,7 @@ public struct NextHop: Codable, Equatable, Hashable, Sendable {
     }
 }
 
-/// Все зависимости движка от ОС — чтобы в тестах подменять их имитацией
+/// All engine dependencies on the OS — so tests can replace them with a fake
 public protocol RouteSystem: AnyObject {
     func networkSnapshot(preferredInterface: String) -> GatewayDetector.Snapshot
     func routingTable() -> [RouteEntry]
@@ -49,10 +49,10 @@ public protocol RouteSystem: AnyObject {
 public final class LiveRouteSystem: RouteSystem {
     private let dryRun: Bool
     private let lock = NSLock()
-    /// Маршруты, «добавленные» в режиме dryRun
+    /// Routes "added" in dryRun mode
     private var simulated: [String: RouteEntry] = [:]
 
-    /// При dryRun = true команда route не выполняется (отладка без root)
+    /// With dryRun = true the route command is not run (debugging without root)
     public init(dryRun: Bool) {
         self.dryRun = dryRun
     }

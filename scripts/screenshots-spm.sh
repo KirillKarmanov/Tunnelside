@@ -1,10 +1,10 @@
 #!/bin/bash
-# Скриншоты для README без Xcode.
+# README screenshots without Xcode.
 #   scripts/screenshots-spm.sh
-# Отладочная сборка → демо-служба в пользовательском домене launchd (не от root, в холостом режиме:
-# системные маршруты НЕ меняются) → правила из Design/Screenshots/demo-config.<язык>.json →
-# приложение само снимает своё главное окно (разрешение на запись экрана не нужно) → PNG en-* и ru-* в Design/Screenshots.
-# Окно приложения будет видно на экране около минуты (по полминуты на язык).
+# Debug build → a demo service in the user launchd domain (not root, dry-run mode:
+# system routes are NOT changed) → rules from Design/Screenshots/demo-config.<language>.json →
+# the app captures its own main window (no screen recording permission needed) → en-* and ru-* PNGs in Design/Screenshots.
+# The app window is visible on screen for about a minute (half a minute per language).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -19,7 +19,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "→ Отладочная сборка"
+echo "→ Debug build"
 CONFIG=debug APP="$APP" scripts/build-spm.sh >/dev/null
 
 cat > "$WORK/helper.plist" <<PLIST
@@ -55,18 +55,18 @@ exit(1)
 SWIFT
 swiftc -O "$WORK/seed.swift" -o "$WORK/seed"
 
-# Для каждого языка — чистая демо-служба со своими правилами и запуск приложения на этом языке
+# For each language: a clean demo service with its own rules, and the app launched in that language
 for lang in en ru; do
-    echo "→ Съёмка ($lang)"
+    echo "→ Capturing ($lang)"
     launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || true
     rm -rf "${TMPDIR:-/tmp}/TunnelsideHelperDev"
     launchctl bootstrap "gui/$(id -u)" "$WORK/helper.plist"
     sleep 2
     "$WORK/seed" "$LABEL" "$OUT/demo-config.$lang.json"
-    # Перезапуск, чтобы журнал на скриншоте начинался уже на нужном языке
+    # Restart so the log in the screenshot starts in the right language
     launchctl bootout "gui/$(id -u)/$LABEL"
     launchctl bootstrap "gui/$(id -u)" "$WORK/helper.plist"
-    sleep 4   # даём службе разрешить домены
+    sleep 4   # let the service resolve the domains
 
     mkdir -p "$WORK/raw-$lang"
     TUNNELSIDE_DEV_AGENT=1 TUNNELSIDE_SCREENSHOT_DIR="$WORK/raw-$lang" TUNNELSIDE_SCREENSHOT_DIAGNOSE="dom15.by" \

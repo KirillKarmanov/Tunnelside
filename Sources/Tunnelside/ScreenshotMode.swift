@@ -2,9 +2,9 @@
 import AppKit
 import SwiftUI
 
-/// Только для Debug-сборки: создаёт скриншоты для публикации.
-/// Использование: TUNNELSIDE_DEV_AGENT=1 TUNNELSIDE_SCREENSHOT_DIR=<папка> Tunnelside.app/Contents/MacOS/Tunnelside
-/// Приложение по очереди переключает страницы и светлое / тёмное оформление, снимает своё главное окно (разрешение на запись экрана не нужно) и завершается.
+/// Debug builds only: takes screenshots for publishing.
+/// Usage: TUNNELSIDE_DEV_AGENT=1 TUNNELSIDE_SCREENSHOT_DIR=<folder> Tunnelside.app/Contents/MacOS/Tunnelside
+/// The app switches through pages and light / dark appearance, captures its own main window (no screen recording permission needed) and quits.
 @MainActor
 enum ScreenshotMode {
     private static var started = false

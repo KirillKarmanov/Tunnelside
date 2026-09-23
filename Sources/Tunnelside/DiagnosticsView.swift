@@ -69,7 +69,7 @@ enum TCPProbe {
         }
     }
 
-    /// Возвращает время установки TCP-соединения (мс)
+    /// Returns the TCP connection setup time (ms)
     static func connect(_ ip: String, port: UInt16, timeout: TimeInterval) -> Result<Double, ProbeError> {
         guard let value = TargetParser.ipv4Value(ip) else { return .failure(.failed(L("Invalid address", "Некорректный адрес"))) }
         let fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)

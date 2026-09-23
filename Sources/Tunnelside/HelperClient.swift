@@ -1,7 +1,7 @@
 import Foundation
 import RouteShared
 
-/// Связь с root-службой и состояние для интерфейса
+/// Connection to the root service and state for the interface
 @MainActor
 final class HelperClient: ObservableObject {
     enum Status: Equatable {
@@ -17,11 +17,11 @@ final class HelperClient: ObservableObject {
     @Published private(set) var isBusy = false
     @Published var alertMessage: String?
 
-    /// Для отладки: подключаться к службе в пользовательском домене (launchctl gui/<uid>), а не к системному LaunchDaemon
+    /// For debugging: connect to the service in the user domain (launchctl gui/<uid>) instead of the system LaunchDaemon
     private let useDevAgent = ProcessInfo.processInfo.environment["TUNNELSIDE_DEV_AGENT"] == "1"
     private var connection: NSXPCConnection?
     private var timer: Timer?
-    /// Увеличивается при каждом локальном изменении конфигурации, чтобы отбросить результаты fetch, отправленного до изменения, и интерфейс не откатывался
+    /// Incremented on every local configuration change to discard results of a fetch sent before the change, so the interface doesn't roll back
     private var configGeneration = 0
 
     init() {
@@ -31,7 +31,7 @@ final class HelperClient: ObservableObject {
         }
     }
 
-    /// Менять конфигурацию может только служба совпадающей версии (протокол мог измениться)
+    /// Only a service of the matching version may change the configuration (the protocol may have changed)
     var canModify: Bool { status == .running }
     var config: HelperConfig? { state?.config }
     var rules: [RouteRule] { state?.config.rules ?? [] }
@@ -46,11 +46,11 @@ final class HelperClient: ObservableObject {
         useDevAgent || FileManager.default.fileExists(atPath: RouteConstants.launchDaemonPlistPath)
     }
 
-    // MARK: - Чтение
+    // MARK: - Reading
 
     func refresh() {
         guard isInstalled else {
-            // К службе со старым идентификатором не подключиться по новому имени Mach-сервиса — предлагаем обновить для завершения миграции
+            // A service with the old identifier can't be reached by the new Mach service name — offer an update to finish the migration
             status = HelperInstaller.legacyHelperInstalled ? .outdated(installed: L("old version", "старая версия")) : .notInstalled
             state = nil
             return
@@ -74,15 +74,15 @@ final class HelperClient: ObservableObject {
         }
         state = decoded
         status = decoded.version == RouteConstants.helperVersion ? .running : .outdated(installed: decoded.version)
-        // Служба пишет журнал и ошибки правил на языке из конфигурации — передаём ей язык системы
+        // The service writes the log and rule errors in the language from the configuration — pass it the system language
         if status == .running, decoded.config.language != AppLanguage.current {
             mutateConfig { $0.language = AppLanguage.current }
         }
     }
 
-    // MARK: - Изменение правил
+    // MARK: - Changing rules
 
-    /// Возвращает нераспознанный ввод
+    /// Returns unrecognized input
     @discardableResult
     func addTargets(from text: String, note: String = "", group: String = "", via: RouteVia = .physical) -> [String] {
         let inputs = TargetParser.splitInput(text)
@@ -139,7 +139,7 @@ final class HelperClient: ObservableObject {
         mutateConfig { $0.rules.removeAll { ids.contains($0.id) } }
     }
 
-    /// Порядок правил задаёт приоритет при конфликте выходов
+    /// Rule order sets the priority when exits conflict
     func moveRules(_ ids: Set<RouteRule.ID>, toTop: Bool) {
         mutateConfig { config in
             let moved = config.rules.filter { ids.contains($0.id) }
@@ -160,7 +160,7 @@ final class HelperClient: ObservableObject {
         }
     }
 
-    /// Изменить свежую конфигурацию и отправить. Если другое окно / экземпляр успели изменить её раньше (конфликт revision), загрузить свежее состояние и повторить изменение.
+    /// Change the latest configuration and send it. If another window / instance changed it first (revision conflict), load fresh state and repeat the change.
     func mutateConfig(_ body: @escaping (inout HelperConfig) -> Void) {
         guard canModify, let base = state?.config else {
             alertMessage = status == .running ? L("The background service is not ready", "Фоновая служба не готова") : L("Install or update the background service first", "Сначала установите или обновите фоновую службу")
@@ -239,7 +239,7 @@ final class HelperClient: ObservableObject {
         }
     }
 
-    // MARK: - Установка / удаление
+    // MARK: - Install / uninstall
 
     func installHelper() {
         isBusy = true
@@ -265,7 +265,7 @@ final class HelperClient: ObservableObject {
                     try await HelperInstaller.uninstall()
                     self?.resetConnection()
                 } catch HelperInstaller.InstallError.cancelled {
-                    // Пользователь отменил — возобновить синхронизацию
+                    // The user cancelled — resume syncing
                     self?.reapply()
                 } catch {
                     self?.alertMessage = L("Could not uninstall: \(error.localizedDescription)", "Не удалось удалить: \(error.localizedDescription)")
@@ -278,7 +278,7 @@ final class HelperClient: ObservableObject {
             finish()
             return
         }
-        // Сначала служба убирает добавленные ею маршруты
+        // First the service removes the routes it added
         proxy.removeAllRoutes { _ in
             DispatchQueue.main.async { finish() }
         }
@@ -313,7 +313,7 @@ final class HelperClient: ObservableObject {
     }
 }
 
-/// Навигация между разделами (например, из правил или таблицы маршрутов в диагностику)
+/// Navigation between sections (for example, from rules or the routing table to diagnostics)
 @MainActor
 final class AppNavigation: ObservableObject {
     enum Section: String, CaseIterable, Identifiable {
@@ -342,7 +342,7 @@ final class AppNavigation: ObservableObject {
 
     @Published var section: Section? = .rules
     @Published var diagnosticsTarget = ""
-    /// Увеличить, чтобы диагностика запустилась автоматически
+    /// Increment to start diagnostics automatically
     @Published var diagnosticsRequest = 0
 
     func diagnose(_ target: String) {

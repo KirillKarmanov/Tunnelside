@@ -65,7 +65,7 @@ struct RouteTableView: View {
         .sorted { ($0.entry.prefix, $0.entry.destination) < ($1.entry.prefix, $1.entry.destination) }
     }
 
-    /// Устаревшие маршруты, которые можно удалить (кроме управляемых Tunnelside — их фоновая служба исправит сама)
+    /// Stale routes that can be deleted (except routes managed by Tunnelside — the background service fixes those itself)
     private var staleAddresses: [String] {
         Array(Set(allRows.filter { $0.staleReason != nil && !$0.managed }.map(\.entry.address))).sorted()
     }

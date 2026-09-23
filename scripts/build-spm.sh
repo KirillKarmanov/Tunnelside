@@ -1,10 +1,10 @@
 #!/bin/bash
-# Сборка Tunnelside.app без Xcode: swift build → упаковка бандла → подпись → самопроверка.
-# Нужны только Command Line Tools и сертификат для подписи в связке ключей.
+# Builds Tunnelside.app without Xcode: swift build → bundle packaging → signing → self-check.
+# Needs only the Command Line Tools and a code signing certificate in the keychain.
 #
-#   scripts/build-spm.sh                    # подпись сертификатом «Tunnelside Local Signing»
+#   scripts/build-spm.sh                    # sign with the "Tunnelside Local Signing" certificate
 #   SIGN_IDENTITY="Apple Development: …" scripts/build-spm.sh
-#   CONFIG=debug APP=/tmp/x/Tunnelside.app scripts/build-spm.sh   # отладочная сборка (нужна для скриншотов)
+#   CONFIG=debug APP=/tmp/x/Tunnelside.app scripts/build-spm.sh   # debug build (needed for screenshots)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -17,28 +17,28 @@ MIN_MACOS="14.0"
 CONFIG="${CONFIG:-release}"
 APP="${APP:-build/Tunnelside.app}"
 
-echo "→ Компиляция ($CONFIG)"
+echo "→ Compiling ($CONFIG)"
 swift build -c "$CONFIG" --product Tunnelside
 swift build -c "$CONFIG" --product TunnelsideHelper
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 
-echo "→ Упаковка $APP"
+echo "→ Packaging $APP"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/Tunnelside" "$APP/Contents/MacOS/Tunnelside"
-# HelperInstaller ищет службу через Bundle.main.url(forAuxiliaryExecutable:) — это Contents/MacOS
+# HelperInstaller looks for the service via Bundle.main.url(forAuxiliaryExecutable:), which is Contents/MacOS
 cp "$BIN/TunnelsideHelper" "$APP/Contents/MacOS/$HELPER_ID"
 cp "Sources/Tunnelside/Resources/$HELPER_ID.plist" "$APP/Contents/Resources/"
-# Переводы строк Info.plist: интерфейс переводится в коде (L(...)), а системные тексты — через .lproj
+# Info.plist translations: the interface is translated in code (L(...)), system texts via .lproj
 cp -R Sources/Tunnelside/Resources/*.lproj "$APP/Contents/Resources/"
 
-# Картинки службы: PNG вместо Assets.xcassets (каталог компилирует только Xcode)
+# Service images: PNGs instead of Assets.xcassets (only Xcode compiles the catalog)
 IMAGESET="Sources/Tunnelside/Assets.xcassets/HelperIcon.imageset"
 for f in HelperIcon.png HelperIcon@2x.png HelperIcon-dark.png HelperIcon-dark@2x.png; do
     cp "$IMAGESET/$f" "$APP/Contents/Resources/$f"
 done
 
-# Иконка приложения: .icns из готового PNG 1024×1024
+# App icon: .icns from a ready-made 1024×1024 PNG
 ICONSET="$(mktemp -d)/AppIcon.iconset"
 mkdir -p "$ICONSET"
 SRC_ICON="Design/Icons/Exports/AppIcon-Default.png"
@@ -49,7 +49,7 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 rm -rf "$(dirname "$ICONSET")"
 
-# Info.plist: подставляем переменные, которые раньше подставлял Xcode
+# Info.plist: substitute the variables Xcode used to fill in
 sed -e "s/\$(DEVELOPMENT_LANGUAGE)/en/" \
     -e "s/\$(EXECUTABLE_NAME)/Tunnelside/" \
     -e "s/\$(PRODUCT_BUNDLE_IDENTIFIER)/$APP_ID/" \
@@ -60,35 +60,35 @@ sed -e "s/\$(DEVELOPMENT_LANGUAGE)/en/" \
     Config/Tunnelside-Info.plist > "$APP/Contents/Info.plist"
 plutil -insert CFBundleIconFile -string AppIcon "$APP/Contents/Info.plist"
 if grep -q '\$(' "$APP/Contents/Info.plist"; then
-    echo "✗ В Info.plist остались неподставленные переменные:" >&2
+    echo "✗ Info.plist still has unsubstituted variables:" >&2
     grep '\$(' "$APP/Contents/Info.plist" >&2
     exit 1
 fi
 plutil -lint "$APP/Contents/Info.plist" >/dev/null
 
-echo "→ Подпись «${SIGN_IDENTITY}»"
+echo "→ Signing with \"${SIGN_IDENTITY}\""
 if ! security find-certificate -c "$SIGN_IDENTITY" >/dev/null 2>&1; then
-    echo "✗ Сертификат «${SIGN_IDENTITY}» не найден в связке ключей" >&2
+    echo "✗ Certificate \"${SIGN_IDENTITY}\" not found in the keychain" >&2
     exit 1
 fi
-# Hardened runtime: без него в процесс можно подгрузить чужой код через DYLD_INSERT_LIBRARIES
+# Hardened runtime: without it foreign code can be injected into the process via DYLD_INSERT_LIBRARIES
 codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" \
     --identifier "$HELPER_ID" "$APP/Contents/MacOS/$HELPER_ID"
 codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" \
     --identifier "$APP_ID" "$APP"
 codesign --verify --strict --deep "$APP"
 
-echo "→ Самопроверка: служба примет это приложение, а подделку — нет"
+echo "→ Self-check: the service accepts this app and rejects a fake"
 REQUIREMENT="$("$APP/Contents/MacOS/$HELPER_ID" --print-client-requirement)"
-echo "   требование службы: $REQUIREMENT"
-codesign --verify -R="$REQUIREMENT" "$APP" || { echo "✗ Служба не примет собственное приложение" >&2; exit 1; }
+echo "   service requirement: $REQUIREMENT"
+codesign --verify -R="$REQUIREMENT" "$APP" || { echo "✗ The service would reject its own app" >&2; exit 1; }
 FAKE="$(mktemp -d)/fake"
 cp "$APP/Contents/MacOS/Tunnelside" "$FAKE"
 codesign --force --sign - --identifier "$APP_ID" "$FAKE" 2>/dev/null
 if codesign --verify -R="$REQUIREMENT" "$FAKE" 2>/dev/null; then
-    echo "✗ Служба примет подделку с ad-hoc подписью" >&2
+    echo "✗ The service would accept a fake with an ad-hoc signature" >&2
     exit 1
 fi
 rm -rf "$(dirname "$FAKE")"
 
-echo "✓ Готово: $APP"
+echo "✓ Done: $APP"

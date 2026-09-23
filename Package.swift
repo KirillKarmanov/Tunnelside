@@ -1,5 +1,5 @@
 // swift-tools-version:5.9
-// Сборка без Xcode: `swift build` собирает бинарники, `scripts/build-spm.sh` упаковывает их в Tunnelside.app.
+// Build without Xcode: `swift build` builds the binaries, `scripts/build-spm.sh` packages them into Tunnelside.app.
 import PackageDescription
 
 let package = Package(

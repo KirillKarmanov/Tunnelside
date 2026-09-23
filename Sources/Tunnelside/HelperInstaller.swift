@@ -1,7 +1,7 @@
 import Foundation
 import RouteShared
 
-/// Установка / удаление root LaunchDaemon через окно запроса пароля администратора macOS
+/// Installs / uninstalls the root LaunchDaemon through the macOS administrator password prompt
 enum HelperInstaller {
     enum InstallError: LocalizedError {
         case cancelled
@@ -31,7 +31,7 @@ enum HelperInstaller {
         \(legacyCleanupScript)
         /bin/launchctl bootout system/\(label) >/dev/null 2>&1 || true
         if [ -d \(q(RouteConstants.legacySupportDirectory)) ] && [ ! -e \(q(RouteConstants.supportDirectory)) ]; then
-          # Сбой копирования не должен прервать установку: без переноса служба просто начнёт с пустыми правилами
+          # A failed copy must not abort the install: without migration the service just starts with no rules
           /bin/cp -Rp \(q(RouteConstants.legacySupportDirectory)) \(q(RouteConstants.supportDirectory + ".migrating")) \
             && /bin/mv \(q(RouteConstants.supportDirectory + ".migrating")) \(q(RouteConstants.supportDirectory)) \
             || /bin/rm -rf \(q(RouteConstants.supportDirectory + ".migrating"))
@@ -52,7 +52,7 @@ enum HelperInstaller {
         try await runPrivileged(script)
     }
 
-    /// Удалить службу, сохранив правила в /Library/Application Support/Tunnelside
+    /// Uninstall the service, keeping the rules in /Library/Application Support/Tunnelside
     static func uninstall() async throws {
         let script = """
         \(legacyCleanupScript)
@@ -62,7 +62,7 @@ enum HelperInstaller {
         try await runPrivileged(script)
     }
 
-    /// Остановить и удалить службу со старым идентификатором (в том числе от MacOSRoute). Её маршруты остаются в системе: правила и записи о маршрутах переносятся при установке, и новая служба управляет ими дальше.
+    /// Stop and remove a service with an old identifier (including MacOSRoute's). Its routes stay in the system: rules and route records are carried over on install, and the new service keeps managing them.
     private static var legacyCleanupScript: String {
         RouteConstants.legacyHelperLabels.map { label in
             """
@@ -72,7 +72,7 @@ enum HelperInstaller {
         }.joined(separator: "\n")
     }
 
-    /// Установлена ли ещё служба со старым идентификатором
+    /// Whether a service with an old identifier is still installed
     static var legacyHelperInstalled: Bool {
         RouteConstants.legacyHelperLabels.contains { FileManager.default.fileExists(atPath: "/Library/LaunchDaemons/\($0).plist") }
     }
@@ -108,7 +108,7 @@ enum HelperInstaller {
         }
     }
 
-    /// Экранирование одинарных кавычек для shell
+    /// Escapes single quotes for the shell
     private static func q(_ s: String) -> String {
         "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }

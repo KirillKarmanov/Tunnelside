@@ -104,7 +104,7 @@ struct RulesView: View {
         }
     }
 
-    // MARK: Добавление
+    // MARK: Adding
 
     private var addBar: some View {
         HStack(spacing: 8) {
@@ -139,7 +139,7 @@ struct RulesView: View {
         }
     }
 
-    // MARK: Фильтр
+    // MARK: Filter
 
     private var filterBar: some View {
         HStack(spacing: 10) {
@@ -172,7 +172,7 @@ struct RulesView: View {
         }
     }
 
-    // MARK: Таблица
+    // MARK: Table
 
     private var table: some View {
         Table(rows, selection: $selection) {
@@ -313,7 +313,7 @@ struct StatusBadge: View {
     }
 }
 
-/// Меню выбора выхода
+/// Exit selection menu
 struct ViaMenu: View {
     @Binding var via: RouteVia
     let interfaces: [NetworkInterfaceInfo]
@@ -357,7 +357,7 @@ struct ViaMenu: View {
     }
 }
 
-/// Можно ввести новую группу или выбрать существующую
+/// A new group can be typed or an existing one picked
 struct GroupField: View {
     @Binding var text: String
     let groups: [String]

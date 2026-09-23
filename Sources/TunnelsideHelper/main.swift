@@ -22,7 +22,7 @@ final class HelperService: NSObject, RouteHelperProtocol {
 
     func updateConfig(_ configData: Data, withReply reply: @escaping (String?, Bool) -> Void) {
         guard let config = try? RouteJSON.decoder().decode(HelperConfig.self, from: configData) else {
-            // Язык меняется на workQueue — читаем его там же
+            // The language changes on workQueue — read it there too
             engine.workQueue.async { reply(L("Invalid configuration format", "Некорректный формат конфигурации"), false) }
             return
         }
@@ -52,7 +52,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
-        // Подключаться могут только администраторы (они и так могут менять маршруты через sudo)
+        // Only administrators may connect (they can change routes via sudo anyway)
         guard isAdministrator(uid: connection.effectiveUserIdentifier) else {
             FileHandle.standardError.write(Data("Rejected connection from non-admin uid=\(connection.effectiveUserIdentifier)\n".utf8))
             return false
@@ -70,11 +70,11 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
         return true
     }
 
-    /// Клиент обязан быть приложением Tunnelside, подписанным тем же сертификатом, что и эта служба.
-    /// Сертификат Apple Developer → проверка по Team ID; собственный (самоподписанный) сертификат →
-    /// проверка по SHA-1 листового сертификата. Одного bundle ID мало: его подделает любая
-    /// программа через `codesign -s - --identifier …`. Служба без сертификата (ad-hoc)
-    /// возвращает nil и отказывает всем клиентам.
+    /// The client must be the Tunnelside app signed with the same certificate as this service.
+    /// Apple Developer certificate → check by Team ID; own (self-signed) certificate →
+    /// check by the SHA-1 of the leaf certificate. A bundle ID alone is not enough: any program
+    /// can fake it with `codesign -s - --identifier …`. A service without a certificate (ad-hoc)
+    /// returns nil and rejects all clients.
     static let clientRequirement: String? = {
         let identifier = "identifier \"\(RouteConstants.appBundleID)\""
         let info = ownSigningInformation()
@@ -160,7 +160,7 @@ if let index = arguments.firstIndex(of: "--resolve"), arguments.indices.contains
 }
 
 let isRoot = getuid() == 0
-// Для отладки: без root хранить данные во временной папке и не вызывать route
+// For debugging: without root, keep data in a temporary folder and don't call route
 let storage = isRoot
     ? URL(fileURLWithPath: RouteConstants.supportDirectory)
     : FileManager.default.temporaryDirectory.appendingPathComponent("TunnelsideHelperDev")

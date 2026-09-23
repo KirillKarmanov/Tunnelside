@@ -34,7 +34,7 @@ struct MainView: View {
     }
 }
 
-/// Верх окна: состояние Helper, текущий физический шлюз и общий переключатель
+/// Top of the window: helper state, current physical gateway and the main switch
 struct HelperBanner: View {
     @EnvironmentObject private var client: HelperClient
 

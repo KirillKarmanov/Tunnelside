@@ -1,19 +1,19 @@
 import Foundation
 
-/// XPC-протокол между приложением и root-службой. Сложные данные передаются как JSON Data, чтобы обойтись без шаблонного кода NSSecureCoding.
-/// При изменении протокола обязательно увеличить RouteConstants.helperVersion.
+/// XPC protocol between the app and the root service. Complex data is passed as JSON Data to avoid NSSecureCoding boilerplate.
+/// Always bump RouteConstants.helperVersion when the protocol changes.
 @objc(RouteHelperProtocol)
 public protocol RouteHelperProtocol {
-    /// Возвращает HelperState в JSON
+    /// Returns HelperState as JSON
     func fetchState(withReply reply: @escaping (Data?, String?) -> Void)
-    /// Принимает HelperConfig в JSON. Его revision должна совпадать с текущей revision службы,
-    /// иначе конфигурация не сохраняется и возвращается conflict = true — вызывающий повторяет на свежем состоянии.
-    /// Возвращает сразу после сохранения, синхронизация маршрутов идёт в фоне.
+    /// Accepts HelperConfig as JSON. Its revision must equal the service's current revision,
+    /// otherwise the configuration is not saved and conflict = true is returned — the caller retries on fresh state.
+    /// Returns right after saving; the route sync runs in the background.
     func updateConfig(_ configData: Data, withReply reply: @escaping (_ error: String?, _ conflict: Bool) -> Void)
-    /// Заново определить шлюз, обновить адреса доменов и применить все маршруты (возвращает после синхронизации)
+    /// Detect the gateway again, refresh domain addresses and apply all routes (returns after the sync)
     func reapplyAll(withReply reply: @escaping (String?) -> Void)
-    /// Удалить все маршруты, добавленные службой, и поставить синхронизацию на паузу (вызывается перед удалением)
+    /// Remove all routes added by the service and pause syncing (called before uninstalling)
     func removeAllRoutes(withReply reply: @escaping (String?) -> Void)
-    /// Удалить статические маршруты, которыми не управляет Tunnelside (для очистки устаревших маршрутов)
+    /// Delete static routes not managed by Tunnelside (to clean up stale routes)
     func deleteSystemRoutes(_ addresses: [String], withReply reply: @escaping (String?) -> Void)
 }

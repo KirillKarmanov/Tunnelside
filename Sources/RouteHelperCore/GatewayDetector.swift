@@ -2,9 +2,9 @@ import Foundation
 import RouteShared
 import SystemConfiguration
 
-/// Читает IPv4-конфигурацию сетевых служб из SCDynamicStore и выбирает шлюз физического интерфейса (не VPN-туннеля).
+/// Reads the IPv4 configuration of network services from SCDynamicStore and picks the gateway of a physical interface (not a VPN tunnel).
 public enum GatewayDetector {
-    /// Префиксы туннелей и виртуальных интерфейсов: их "Router" — не физический шлюз, через который можно обойти VPN
+    /// Prefixes of tunnels and virtual interfaces: their "Router" is not a physical gateway that can bypass the VPN
     static let virtualInterfacePrefixes = ["utun", "ipsec", "ppp", "gif", "stf", "feth", "awdl", "llw", "anpi", "lo", "vmenet", "tap", "tun"]
 
     public static func isVirtual(_ name: String) -> Bool {
@@ -49,7 +49,7 @@ public enum GatewayDetector {
         return choose(entries: entries, serviceOrder: serviceOrder, preferredInterface: preferredInterface)
     }
 
-    /// Чистая функция, удобно тестировать
+    /// Pure function, easy to test
     public static func choose(entries: [ServiceEntry], serviceOrder: [String], preferredInterface: String) -> Snapshot {
         func rank(_ e: ServiceEntry, _ name: String) -> (Int, Int, String) {
             (serviceOrder.firstIndex(of: e.serviceID) ?? Int.max, name.hasPrefix("en") ? 0 : 1, name)

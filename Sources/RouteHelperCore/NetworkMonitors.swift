@@ -2,7 +2,7 @@ import Darwin
 import Foundation
 import SystemConfiguration
 
-/// Следит за изменениями IPv4-сети (смена Wi-Fi, подключение/отключение кабеля, сон/пробуждение, продление DHCP и т. п.)
+/// Watches IPv4 network changes (Wi-Fi switch, cable plugged in/out, sleep/wake, DHCP renewal, etc.)
 public final class NetworkChangeMonitor {
     private var store: SCDynamicStore?
     private let onChange: () -> Void
@@ -28,7 +28,7 @@ public final class NetworkChangeMonitor {
     }
 }
 
-/// Следит за изменениями таблицы маршрутов ядра (например, VPN-клиент при подключении удалил или перекрыл наши маршруты)
+/// Watches kernel routing table changes (for example, a VPN client removed or overrode our routes when connecting)
 public final class RoutingTableMonitor {
     private var source: DispatchSourceRead?
 

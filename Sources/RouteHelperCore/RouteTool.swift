@@ -1,8 +1,8 @@
 import Foundation
 import RouteShared
 
-/// Обёртка над /sbin/route. Формат адреса: хост — "1.2.3.4", подсеть — "10.0.0.0/8".
-/// Таблица маршрутов читается через RoutingTable (sysctl), здесь — только изменения и точечные запросы.
+/// Wrapper around /sbin/route. Address format: host — "1.2.3.4", subnet — "10.0.0.0/8".
+/// The routing table is read via RoutingTable (sysctl); this is only for changes and point queries.
 public enum RouteTool {
     public struct RouteInfo: Equatable, Sendable {
         public var destination: String?
@@ -37,7 +37,7 @@ public enum RouteTool {
         return CommandResult(status: process.terminationStatus, output: output)
     }
 
-    /// Возвращает ["-host", "1.2.3.4"] или ["-net", "10.0.0.0/8"]
+    /// Returns ["-host", "1.2.3.4"] or ["-net", "10.0.0.0/8"]
     static func destinationArguments(_ address: String) -> [String] {
         address.contains("/") ? ["-net", address] : ["-host", address]
     }
@@ -65,7 +65,7 @@ public enum RouteTool {
         return result.succeeded ? .success(()) : .failure(RouteToolError(message: result.output))
     }
 
-    /// Запрашивает маршрут, который ядро фактически выбирает для адреса (самый длинный префикс), root не нужен
+    /// Asks which route the kernel actually picks for an address (longest prefix); no root needed
     public static func get(_ address: String) -> RouteInfo? {
         let result = run(["-n", "get"] + destinationArguments(address))
         guard result.succeeded else { return nil }

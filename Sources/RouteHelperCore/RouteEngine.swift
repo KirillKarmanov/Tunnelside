@@ -1,24 +1,24 @@
 import Foundation
 import RouteShared
 
-/// Движок маршрутов: хранит конфигурацию, отслеживает добавленные маршруты и приводит (reconcile) таблицу маршрутов ядра к нужному состоянию.
+/// Route engine: stores the configuration, tracks added routes and reconciles the kernel routing table to the desired state.
 ///
-/// Соглашения о согласованности:
-/// - Все изменения выполняются последовательно на workQueue; публикуемый снимок защищён lock, чтение не блокируется медленными операциями.
-/// - Маршруты в applied.json — всегда надмножество реально добавленных: запись делается до добавления и удаляется после успешного удаления, поэтому после сбоя и перезапуска очистку можно продолжить.
-/// - Каждая синхронизация заново сверяется с таблицей маршрутов ядра, а не доверяет прошлому результату, поэтому чинит маршруты, изменённые VPN и другими программами.
-/// - Если следующий переход временно недоступен (нет сети, интерфейс не подключён), существующие маршруты сохраняются, а не удаляются.
-/// - При удалении правила адрес возвращается в состояние до правила: такой же маршрут, существовавший ранее, сохраняется; заменённый рабочий статический маршрут восстанавливается, устаревший — нет.
+/// Consistency rules:
+/// - All changes run serially on workQueue; the published snapshot is guarded by a lock, so reads are never blocked by slow operations.
+/// - Routes in applied.json are always a superset of the routes actually added: a record is written before adding and removed after a successful removal, so cleanup can continue after a crash and restart.
+/// - Every sync re-checks the kernel routing table instead of trusting the previous result, so it repairs routes changed by the VPN and other programs.
+/// - If the next hop is temporarily unavailable (no network, interface not connected), existing routes are kept, not removed.
+/// - When a rule is removed, the address returns to its state before the rule: an identical pre-existing route is kept; a replaced working static route is restored, a stale one is not.
 public final class RouteEngine: @unchecked Sendable {
     struct AppliedRoute: Codable, Equatable {
         var gateway: String?
         var interface: String?
-        /// Шлюз заменённого исходного статического маршрута; восстанавливается при удалении правила
+        /// Gateway of the replaced original static route; restored when the rule is removed
         var restoreGateway: String?
-        /// До применения правила в ядре уже был точно такой же маршрут (например, собственный маршрут VPN); при удалении правила сохраняется
+        /// An identical route already existed in the kernel before the rule was applied (for example, the VPN's own route); kept when the rule is removed
         var adopted: Bool?
 
-        /// Принадлежит ли этот маршрут в ядре всё ещё нам
+        /// Whether this kernel route still belongs to us
         func owns(_ entry: RouteEntry) -> Bool {
             if let gateway { return entry.gateway == gateway }
             return entry.gateway == nil && entry.interface == interface
@@ -26,7 +26,7 @@ public final class RouteEngine: @unchecked Sendable {
     }
 
     struct DNSRecord: Codable, Equatable {
-        /// IP -> когда он последний раз был среди адресов домена
+        /// IP -> when it was last among the domain's addresses
         var addresses: [String: Date] = [:]
         var resolvedAt: Date?
         var lastError: String?
@@ -47,19 +47,19 @@ public final class RouteEngine: @unchecked Sendable {
     private let storageDirectory: URL
     private let now: () -> Date
 
-    // Доступ только на workQueue
+    // Accessed only on workQueue
     private var config: HelperConfig
     private var applied: [String: AppliedRoute]
     private var dns: [String: DNSRecord]
     private var pendingReconcile: DispatchWorkItem?
     private var pendingForceResolve = false
-    /// После removeAllRoutes синхронизация на паузе (процесс удаления), пока не обновится конфигурация или не будет ручного применения
+    /// After removeAllRoutes, sync is paused (uninstall in progress) until the configuration is updated or a manual reapply happens
     private var suspended = false
     private var networkMonitor: NetworkChangeMonitor?
     private var routingMonitor: RoutingTableMonitor?
     private var timer: DispatchSourceTimer?
 
-    // Защищено lock
+    // Guarded by lock
     private let lock = NSLock()
     private var snapshot: HelperState
 
@@ -87,7 +87,7 @@ public final class RouteEngine: @unchecked Sendable {
             routingMonitor = RoutingTableMonitor(queue: workQueue) { [weak self] in
                 self?.scheduleReconcile(reason: nil, delay: 2, forceResolve: false)
             }
-            // Страховочная периодическая проверка: подхватывает пропущенные события и по интервалу обновляет адреса доменов
+            // Safety-net periodic check: catches missed events and refreshes domain addresses on schedule
             let timer = DispatchSource.makeTimerSource(queue: workQueue)
             timer.schedule(deadline: .now() + 30, repeating: 30)
             timer.setEventHandler { [weak self] in self?.reconcile(reason: nil, forceResolve: false) }
@@ -97,7 +97,7 @@ public final class RouteEngine: @unchecked Sendable {
         }
     }
 
-    // MARK: - Внешний интерфейс (вызов из любого потока)
+    // MARK: - Public interface (callable from any thread)
 
     public func currentState() -> HelperState {
         lock.lock(); defer { lock.unlock() }
@@ -185,12 +185,12 @@ public final class RouteEngine: @unchecked Sendable {
         }
     }
 
-    /// Для тестов: синхронно выполнить одну синхронизацию
+    /// For tests: run one sync synchronously
     func reconcileNow(reason: String? = nil, forceResolve: Bool = false) {
         workQueue.sync { reconcile(reason: reason, forceResolve: forceResolve) }
     }
 
-    // MARK: - Логика синхронизации
+    // MARK: - Sync logic
 
     private func scheduleReconcile(reason: String?, delay: TimeInterval, forceResolve: Bool) {
         dispatchPrecondition(condition: .onQueue(workQueue))
@@ -226,7 +226,7 @@ public final class RouteEngine: @unchecked Sendable {
             resolveDomains(force: forceResolve, network: network)
         }
 
-        // 1. Вычисляем нужное состояние
+        // 1. Compute the desired state
         var statuses: [String: RuleStatus] = [:]
         var desired: [String: (hop: NextHop, rule: RouteRule)] = [:]
         var keep = Set<String>()
@@ -271,7 +271,7 @@ public final class RouteEngine: @unchecked Sendable {
             statuses[rule.id.uuidString] = status
         }
 
-        // 2. Удаляем маршруты, которые больше не нужны
+        // 2. Remove routes that are no longer needed
         var table = system.routingTable()
         var changed = false
         for address in applied.keys.sorted() where desired[address] == nil && !keep.contains(address) {
@@ -279,7 +279,7 @@ public final class RouteEngine: @unchecked Sendable {
             changed = true
         }
 
-        // 3. Добавляем / исправляем маршруты
+        // 3. Add / fix routes
         var failed: [String: String] = [:]
         for address in desired.keys.sorted(by: ipLess) {
             let want = desired[address]!.hop
@@ -304,14 +304,14 @@ public final class RouteEngine: @unchecked Sendable {
             record.gateway = want.gateway
             record.interface = want.interface
             applied[address] = record
-            saveApplied() // сначала записываем намерение, потом меняем ядро
+            saveApplied() // record the intent first, then change the kernel
 
             changed = true
-            // «Удалить + добавить» вместо route change: после смены сети change может оставить старый адрес источника (ifa)
+            // "Delete + add" instead of route change: after a network change, change may keep the old source address (ifa)
             if existing != nil { _ = system.deleteRoute(address) }
             var result = system.addRoute(address, via: want)
             if case .failure = result, existing == nil, case .success = system.deleteRoute(address) {
-                result = system.addRoute(address, via: want) // возможен нераспознанный равнозначный маршрут — удаляем и повторяем
+                result = system.addRoute(address, via: want) // there may be an unrecognized equivalent route — delete it and retry
             }
             switch result {
             case .success:
@@ -331,7 +331,7 @@ public final class RouteEngine: @unchecked Sendable {
             }
         }
 
-        // 4. Проверяем результат по фактическому состоянию ядра
+        // 4. Verify the result against the actual kernel state
         if changed { table = system.routingTable() }
         for (key, var status) in statuses {
             status.appliedAddresses = status.addresses.filter { address in
@@ -347,7 +347,7 @@ public final class RouteEngine: @unchecked Sendable {
         publish(statuses: statuses, network: network, applyDate: now())
     }
 
-    /// Удаляет маршрут, которым управляем мы; если маршрут в ядре уже изменён другой программой, удаляется только запись. Возвращает текст ошибки.
+    /// Removes a route we manage; if the kernel route was already changed by another program, only the record is removed. Returns the error text.
     private func removeManagedRoute(_ address: String, table: [RouteEntry]) -> String? {
         guard let record = applied[address] else { return nil }
         if record.adopted == true {
@@ -355,7 +355,7 @@ public final class RouteEngine: @unchecked Sendable {
         } else if let entry = RoutingTable.exactRoute(for: address, in: table), record.owns(entry) {
             if case .failure(let error) = system.deleteRoute(address) {
                 log(.error, L("Could not remove route \(address): \(error)", "Не удалось удалить маршрут \(address): \(error)"))
-                return error.message // запись сохраняем, повтор при следующей синхронизации
+                return error.message // keep the record, retry on the next sync
             }
             if let restore = record.restoreGateway {
                 if case .failure(let error) = system.addRoute(address, via: NextHop(gateway: restore, interface: nil)) {
@@ -372,7 +372,7 @@ public final class RouteEngine: @unchecked Sendable {
         return nil
     }
 
-    /// Находится ли шлюз в подсети одной из текущих сетей
+    /// Whether the gateway is in the subnet of one of the current networks
     private func isReachable(_ gateway: String?, network: GatewayDetector.Snapshot) -> Bool {
         guard let gateway else { return false }
         return network.interfaces.contains { i in
@@ -477,7 +477,7 @@ public final class RouteEngine: @unchecked Sendable {
             dirty = true
         }
 
-        // Удаляем старые адреса, у которых истёк срок удержания
+        // Drop old addresses whose retention period has expired
         let retention = TimeInterval(config.dnsRetentionHours * 3600)
         for domain in dns.keys {
             guard var record = dns[domain], let resolvedAt = record.resolvedAt else { continue }
@@ -495,7 +495,7 @@ public final class RouteEngine: @unchecked Sendable {
         if dirty { saveDNS() }
     }
 
-    // MARK: - Публикация состояния и сохранение
+    // MARK: - Publishing state and saving
 
     private func publish(statuses: [String: RuleStatus], network: GatewayDetector.Snapshot, applyDate: Date?) {
         let managed = applied.keys.sorted(by: ipLess).map { ManagedRoute(address: $0, gateway: applied[$0]?.gateway, interface: applied[$0]?.interface) }
@@ -538,7 +538,7 @@ public final class RouteEngine: @unchecked Sendable {
     }
 }
 
-/// Сравнивает строки IP / CIDR в числовом порядке
+/// Compares IP / CIDR strings in numeric order
 func ipLess(_ a: String, _ b: String) -> Bool {
     func key(_ s: String) -> (UInt32, Int) {
         let parts = s.split(separator: "/")

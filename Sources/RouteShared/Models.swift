@@ -1,12 +1,12 @@
 import Foundation
 
-/// Выход для правила
+/// Where a rule's traffic goes
 public enum RouteVia: Codable, Hashable, Sendable {
-    /// Физический шлюз, выбранный автоматически (мимо VPN)
+    /// Physical gateway picked automatically (bypassing the VPN)
     case physical
-    /// Заданный интерфейс: через его шлюз, если он есть, иначе (например, utun у VPN) напрямую через интерфейс
+    /// A specific interface: through its gateway if it has one, otherwise (for example, a VPN utun) directly through the interface
     case interface(String)
-    /// IP заданного шлюза
+    /// IP of a specific gateway
     case gateway(String)
 
     public var label: String {
@@ -20,11 +20,11 @@ public enum RouteVia: Codable, Hashable, Sendable {
 
 public struct RouteRule: Codable, Identifiable, Hashable, Sendable {
     public var id: UUID
-    /// IP, CIDR или домен
+    /// IP, CIDR or domain
     public var target: String
     public var enabled: Bool
     public var note: String
-    /// Имя группы; пустая строка — без группы
+    /// Group name; an empty string means no group
     public var group: String
     public var via: RouteVia
 
@@ -49,11 +49,11 @@ public struct RouteRule: Codable, Identifiable, Hashable, Sendable {
 }
 
 public enum DNSMode: String, Codable, CaseIterable, Sendable {
-    /// Запрос к DNS-серверу сети через физический интерфейс (мимо DNS и Fake-IP у VPN / прокси)
+    /// Query the network's DNS server through the physical interface (bypassing VPN / proxy DNS and Fake-IP)
     case physical
-    /// Системный резолвер (его может перехватывать VPN / прокси)
+    /// System resolver (may be intercepted by a VPN / proxy)
     case system
-    /// Запрос к своему DNS-серверу через физический интерфейс
+    /// Query a custom DNS server through the physical interface
     case custom
 
     public var label: String {
@@ -69,20 +69,20 @@ public struct HelperConfig: Codable, Equatable, Sendable {
     public static let automaticInterface = "auto"
 
     public var rules: [RouteRule]
-    /// Интерфейс физического шлюза: "auto" или BSD-имя интерфейса (например, en0)
+    /// Physical gateway interface: "auto" or a BSD interface name (for example, en0)
     public var interface: String
-    /// Интервал обновления адресов доменов (минуты)
+    /// Domain address refresh interval (minutes)
     public var dnsRefreshMinutes: Int
     public var dnsMode: DNSMode
     public var customDNSServers: [String]
-    /// Сколько часов удерживается маршрут на старый IP после смены адресов домена (чтобы ротация CDN не рвала открытые соединения)
+    /// How many hours a route to an old IP is kept after a domain's addresses change (so CDN rotation doesn't break open connections)
     public var dnsRetentionHours: Int
-    /// Пауза: удалить все маршруты, добавленные Tunnelside, но сохранить правила
+    /// Pause: remove all routes added by Tunnelside but keep the rules
     public var paused: Bool
-    /// Язык сообщений службы (журнал, ошибки правил) — приложение присылает язык системы.
-    /// nil — приложение ещё не подключалось: служба берёт язык системы по умолчанию.
+    /// Language of service messages (log, rule errors) — the app sends the system language.
+    /// nil means the app has not connected yet: the service uses the system default language.
     public var language: AppLanguage?
-    /// Номер версии конфигурации — для обнаружения одновременных изменений (несколько окон или экземпляров приложения)
+    /// Configuration revision number — detects concurrent changes (several windows or app instances)
     public var revision: Int
 
     public init(rules: [RouteRule] = [], interface: String = HelperConfig.automaticInterface, dnsRefreshMinutes: Int = 10,
@@ -112,7 +112,7 @@ public struct HelperConfig: Codable, Equatable, Sendable {
         revision = try c.decodeIfPresent(Int.self, forKey: .revision) ?? 0
     }
 
-    /// Исправить значения вне допустимого диапазона
+    /// Clamp out-of-range values
     public mutating func sanitize() {
         dnsRefreshMinutes = min(max(1, dnsRefreshMinutes), 1440)
         dnsRetentionHours = min(max(0, dnsRetentionHours), 168)
@@ -128,7 +128,7 @@ public struct HelperConfig: Codable, Equatable, Sendable {
     }
 }
 
-/// Физический шлюз (выход по умолчанию)
+/// Physical gateway (the default exit)
 public struct GatewayInfo: Codable, Equatable, Sendable {
     public var interface: String
     public var router: String
@@ -141,14 +141,14 @@ public struct GatewayInfo: Codable, Equatable, Sendable {
     }
 }
 
-/// Сетевой интерфейс системы с IPv4-конфигурацией
+/// A system network interface with an IPv4 configuration
 public struct NetworkInterfaceInfo: Codable, Equatable, Hashable, Sendable {
     public var name: String
     public var router: String?
     public var localAddress: String?
     public var subnetMask: String?
     public var dnsServers: [String]
-    /// Виртуальный интерфейс (туннель VPN и т. п.)
+    /// Virtual interface (VPN tunnel, etc.)
     public var isVirtual: Bool
 
     public init(name: String, router: String?, localAddress: String?, subnetMask: String?, dnsServers: [String], isVirtual: Bool) {
@@ -162,16 +162,16 @@ public struct NetworkInterfaceInfo: Codable, Equatable, Hashable, Sendable {
 }
 
 public struct RuleStatus: Codable, Equatable, Sendable {
-    /// Адреса правила (IP хоста или CIDR), включая удерживаемые старые адреса домена
+    /// Rule addresses (host IP or CIDR), including retained old domain addresses
     public var addresses: [String]
-    /// Адреса, для которых маршрут через нужный выход сейчас подтверждён
+    /// Addresses whose route through the chosen exit is currently confirmed
     public var appliedAddresses: [String]
-    /// Старые адреса домена, которые ещё удерживаются
+    /// Old domain addresses that are still retained
     public var retainedAddresses: [String]
     public var error: String?
     public var warning: String?
     public var resolvedAt: Date?
-    /// Фактический следующий узел, например "192.168.1.1 (en0)"
+    /// Actual next hop, for example "192.168.1.1 (en0)"
     public var nextHop: String?
 
     public init(addresses: [String] = [], appliedAddresses: [String] = [], retainedAddresses: [String] = [],
@@ -186,7 +186,7 @@ public struct RuleStatus: Codable, Equatable, Sendable {
     }
 }
 
-/// Маршрут, который сейчас поддерживает фоновая служба
+/// A route currently maintained by the background service
 public struct ManagedRoute: Codable, Equatable, Hashable, Sendable {
     public var address: String
     public var gateway: String?
@@ -220,7 +220,7 @@ public struct HelperState: Codable, Sendable {
     public var config: HelperConfig
     public var gateway: GatewayInfo?
     public var interfaces: [NetworkInterfaceInfo]
-    /// Ключ — RouteRule.id.uuidString
+    /// Key — RouteRule.id.uuidString
     public var statuses: [String: RuleStatus]
     public var managedRoutes: [ManagedRoute]
     public var lastApplyAt: Date?
