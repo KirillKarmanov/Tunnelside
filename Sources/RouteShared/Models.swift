@@ -11,9 +11,9 @@ public enum RouteVia: Codable, Hashable, Sendable {
 
     public var label: String {
         switch self {
-        case .physical: return "Физический шлюз"
-        case .interface(let name): return "Интерфейс \(name)"
-        case .gateway(let ip): return "Шлюз \(ip)"
+        case .physical: return L("Physical gateway", "Физический шлюз")
+        case .interface(let name): return L("Interface \(name)", "Интерфейс \(name)")
+        case .gateway(let ip): return L("Gateway \(ip)", "Шлюз \(ip)")
         }
     }
 }
@@ -58,9 +58,9 @@ public enum DNSMode: String, Codable, CaseIterable, Sendable {
 
     public var label: String {
         switch self {
-        case .physical: return "DNS физической сети (рекомендуется)"
-        case .system: return "Системный DNS"
-        case .custom: return "Свой DNS-сервер"
+        case .physical: return L("Physical network DNS (recommended)", "DNS физической сети (рекомендуется)")
+        case .system: return L("System DNS", "Системный DNS")
+        case .custom: return L("Custom DNS server", "Свой DNS-сервер")
         }
     }
 }
@@ -77,14 +77,17 @@ public struct HelperConfig: Codable, Equatable, Sendable {
     public var customDNSServers: [String]
     /// Сколько часов удерживается маршрут на старый IP после смены адресов домена (чтобы ротация CDN не рвала открытые соединения)
     public var dnsRetentionHours: Int
-    /// Пауза: удалить все маршруты, добавленные MacOSRoute, но сохранить правила
+    /// Пауза: удалить все маршруты, добавленные Tunnelside, но сохранить правила
     public var paused: Bool
+    /// Язык сообщений службы (журнал, ошибки правил) — приложение присылает язык системы.
+    /// nil — приложение ещё не подключалось: служба берёт язык системы по умолчанию.
+    public var language: AppLanguage?
     /// Номер версии конфигурации — для обнаружения одновременных изменений (несколько окон или экземпляров приложения)
     public var revision: Int
 
     public init(rules: [RouteRule] = [], interface: String = HelperConfig.automaticInterface, dnsRefreshMinutes: Int = 10,
                 dnsMode: DNSMode = .physical, customDNSServers: [String] = [], dnsRetentionHours: Int = 6,
-                paused: Bool = false, revision: Int = 0) {
+                paused: Bool = false, language: AppLanguage? = nil, revision: Int = 0) {
         self.rules = rules
         self.interface = interface
         self.dnsRefreshMinutes = dnsRefreshMinutes
@@ -92,6 +95,7 @@ public struct HelperConfig: Codable, Equatable, Sendable {
         self.customDNSServers = customDNSServers
         self.dnsRetentionHours = dnsRetentionHours
         self.paused = paused
+        self.language = language
         self.revision = revision
     }
 
@@ -104,6 +108,7 @@ public struct HelperConfig: Codable, Equatable, Sendable {
         customDNSServers = try c.decodeIfPresent([String].self, forKey: .customDNSServers) ?? []
         dnsRetentionHours = try c.decodeIfPresent(Int.self, forKey: .dnsRetentionHours) ?? 6
         paused = try c.decodeIfPresent(Bool.self, forKey: .paused) ?? false
+        language = try c.decodeIfPresent(AppLanguage.self, forKey: .language)
         revision = try c.decodeIfPresent(Int.self, forKey: .revision) ?? 0
     }
 

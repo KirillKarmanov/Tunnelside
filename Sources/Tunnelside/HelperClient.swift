@@ -18,7 +18,7 @@ final class HelperClient: ObservableObject {
     @Published var alertMessage: String?
 
     /// Для отладки: подключаться к службе в пользовательском домене (launchctl gui/<uid>), а не к системному LaunchDaemon
-    private let useDevAgent = ProcessInfo.processInfo.environment["MACOSROUTE_DEV_AGENT"] == "1"
+    private let useDevAgent = ProcessInfo.processInfo.environment["TUNNELSIDE_DEV_AGENT"] == "1"
     private var connection: NSXPCConnection?
     private var timer: Timer?
     /// Увеличивается при каждом локальном изменении конфигурации, чтобы отбросить результаты fetch, отправленного до изменения, и интерфейс не откатывался
@@ -51,7 +51,7 @@ final class HelperClient: ObservableObject {
     func refresh() {
         guard isInstalled else {
             // К службе со старым идентификатором не подключиться по новому имени Mach-сервиса — предлагаем обновить для завершения миграции
-            status = HelperInstaller.legacyHelperInstalled ? .outdated(installed: "старая версия") : .notInstalled
+            status = HelperInstaller.legacyHelperInstalled ? .outdated(installed: L("old version", "старая версия")) : .notInstalled
             state = nil
             return
         }
@@ -69,11 +69,15 @@ final class HelperClient: ObservableObject {
 
     private func apply(_ decoded: HelperState?, error: String?) {
         guard let decoded else {
-            status = .unreachable(error ?? "Не удалось прочитать состояние фоновой службы")
+            status = .unreachable(error ?? L("Could not read the background service state", "Не удалось прочитать состояние фоновой службы"))
             return
         }
         state = decoded
         status = decoded.version == RouteConstants.helperVersion ? .running : .outdated(installed: decoded.version)
+        // Служба пишет журнал и ошибки правил на языке из конфигурации — передаём ей язык системы
+        if status == .running, decoded.config.language != AppLanguage.current {
+            mutateConfig { $0.language = AppLanguage.current }
+        }
     }
 
     // MARK: - Изменение правил
@@ -159,7 +163,7 @@ final class HelperClient: ObservableObject {
     /// Изменить свежую конфигурацию и отправить. Если другое окно / экземпляр успели изменить её раньше (конфликт revision), загрузить свежее состояние и повторить изменение.
     func mutateConfig(_ body: @escaping (inout HelperConfig) -> Void) {
         guard canModify, let base = state?.config else {
-            alertMessage = status == .running ? "Фоновая служба не готова" : "Сначала установите или обновите фоновую службу"
+            alertMessage = status == .running ? L("The background service is not ready", "Фоновая служба не готова") : L("Install or update the background service first", "Сначала установите или обновите фоновую службу")
             return
         }
         var config = base
@@ -173,7 +177,7 @@ final class HelperClient: ObservableObject {
     private func submit(_ config: HelperConfig, body: @escaping (inout HelperConfig) -> Void, attemptsLeft: Int) {
         guard let data = try? RouteJSON.encoder().encode(config) else { return }
         remote { [weak self] error in
-            self?.alertMessage = "Не удалось сохранить: \(error)"
+            self?.alertMessage = L("Could not save: \(error)", "Не удалось сохранить: \(error)")
             self?.configGeneration += 1
             self?.refresh()
         }?.updateConfig(data) { error, conflict in
@@ -184,7 +188,7 @@ final class HelperClient: ObservableObject {
                     return
                 }
                 self.configGeneration += 1
-                if conflict { self.alertMessage = "Конфигурацию изменили в другом окне, повторите" }
+                if conflict { self.alertMessage = L("The configuration was changed in another window, try again", "Конфигурацию изменили в другом окне, повторите") }
                 if let error { self.alertMessage = error }
                 self.refresh()
             }
@@ -229,7 +233,7 @@ final class HelperClient: ObservableObject {
         }?.deleteSystemRoutes(addresses) { error in
             DispatchQueue.main.async { [weak self] in
                 self?.isBusy = false
-                if let error { self?.alertMessage = "Часть маршрутов не удалена:\n\(error)" }
+                if let error { self?.alertMessage = L("Some routes were not removed:\n\(error)", "Часть маршрутов не удалена:\n\(error)") }
                 completion()
             }
         }
@@ -246,7 +250,7 @@ final class HelperClient: ObservableObject {
                 try? await Task.sleep(nanoseconds: 800_000_000)
             } catch HelperInstaller.InstallError.cancelled {
             } catch {
-                alertMessage = "Не удалось установить: \(error.localizedDescription)"
+                alertMessage = L("Could not install: \(error.localizedDescription)", "Не удалось установить: \(error.localizedDescription)")
             }
             isBusy = false
             refresh()
@@ -264,7 +268,7 @@ final class HelperClient: ObservableObject {
                     // Пользователь отменил — возобновить синхронизацию
                     self?.reapply()
                 } catch {
-                    self?.alertMessage = "Не удалось удалить: \(error.localizedDescription)"
+                    self?.alertMessage = L("Could not uninstall: \(error.localizedDescription)", "Не удалось удалить: \(error.localizedDescription)")
                 }
                 self?.isBusy = false
                 self?.refresh()
@@ -313,13 +317,18 @@ final class HelperClient: ObservableObject {
 @MainActor
 final class AppNavigation: ObservableObject {
     enum Section: String, CaseIterable, Identifiable {
-        case rules = "Правила"
-        case routeTable = "Таблица маршрутов"
-        case diagnostics = "Диагностика"
-        case logs = "Журнал"
-        case settings = "Настройки"
+        case rules, routeTable, diagnostics, logs, settings
 
         var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .rules: return L("Rules", "Правила")
+            case .routeTable: return L("Routing Table", "Таблица маршрутов")
+            case .diagnostics: return L("Diagnostics", "Диагностика")
+            case .logs: return L("Log", "Журнал")
+            case .settings: return L("Settings", "Настройки")
+            }
+        }
         var symbol: String {
             switch self {
             case .rules: return "arrow.triangle.branch"

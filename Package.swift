@@ -1,9 +1,9 @@
 // swift-tools-version:5.9
-// Сборка без Xcode: `swift build` собирает бинарники, `scripts/build-spm.sh` упаковывает их в MacOSRoute.app.
+// Сборка без Xcode: `swift build` собирает бинарники, `scripts/build-spm.sh` упаковывает их в Tunnelside.app.
 import PackageDescription
 
 let package = Package(
-    name: "MacOSRoute",
+    name: "Tunnelside",
     platforms: [.macOS(.v14)],
     targets: [
         .target(
@@ -17,15 +17,15 @@ let package = Package(
             linkerSettings: [.linkedFramework("SystemConfiguration")]
         ),
         .executableTarget(
-            name: "MacOSRouteHelper",
+            name: "TunnelsideHelper",
             dependencies: ["RouteShared", "RouteHelperCore"],
-            path: "Sources/MacOSRouteHelper",
+            path: "Sources/TunnelsideHelper",
             linkerSettings: [.linkedFramework("Security")]
         ),
         .executableTarget(
-            name: "MacOSRoute",
+            name: "Tunnelside",
             dependencies: ["RouteShared", "RouteHelperCore"],
-            path: "Sources/MacOSRoute",
+            path: "Sources/Tunnelside",
             exclude: ["Assets.xcassets", "AppIcon.icon", "Resources"]
         ),
         .testTarget(

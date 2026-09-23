@@ -33,7 +33,7 @@ public enum GatewayDetector {
     }
 
     public static func snapshot(preferredInterface: String) -> Snapshot {
-        guard let store = SCDynamicStoreCreate(nil, "MacOSRouteGateway" as CFString, nil, nil) else {
+        guard let store = SCDynamicStoreCreate(nil, "TunnelsideGateway" as CFString, nil, nil) else {
             return Snapshot(physical: nil, interfaces: [])
         }
         let serviceOrder = (SCDynamicStoreCopyValue(store, "Setup:/Network/Global/IPv4" as CFString) as? [String: Any])?["ServiceOrder"] as? [String] ?? []

@@ -55,7 +55,7 @@ public enum RouteTool {
     }
 
     public static func add(_ address: String, via hop: NextHop) -> Result<Void, RouteToolError> {
-        guard let args = addArguments(address, via: hop) else { return .failure(RouteToolError(message: "Не указан шлюз или интерфейс")) }
+        guard let args = addArguments(address, via: hop) else { return .failure(RouteToolError(message: L("No gateway or interface specified", "Не указан шлюз или интерфейс"))) }
         let result = run(args)
         return result.succeeded ? .success(()) : .failure(RouteToolError(message: result.output))
     }

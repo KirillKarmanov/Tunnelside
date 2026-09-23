@@ -2,28 +2,26 @@
 # Скриншоты для README без Xcode.
 #   scripts/screenshots-spm.sh
 # Отладочная сборка → демо-служба в пользовательском домене launchd (не от root, в холостом режиме:
-# системные маршруты НЕ меняются) → правила из Design/Screenshots/demo-config.json →
-# приложение само снимает своё главное окно (разрешение на запись экрана не нужно) → PNG в Design/Screenshots.
-# Окно приложения будет видно на экране около полуминуты.
+# системные маршруты НЕ меняются) → правила из Design/Screenshots/demo-config.<язык>.json →
+# приложение само снимает своё главное окно (разрешение на запись экрана не нужно) → PNG en-* и ru-* в Design/Screenshots.
+# Окно приложения будет видно на экране около минуты (по полминуты на язык).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
 WORK="$(mktemp -d)"
 OUT="$ROOT/Design/Screenshots"
-LABEL="com.hyperits.app.MacOSRoute.helper"
-APP="$WORK/MacOSRoute.app"
+LABEL="io.github.kirillkarmanov.Tunnelside.helper"
+APP="$WORK/Tunnelside.app"
 
 cleanup() {
     launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || true
-    rm -rf "$WORK" "${TMPDIR:-/tmp}/MacOSRouteHelperDev"
+    rm -rf "$WORK" "${TMPDIR:-/tmp}/TunnelsideHelperDev"
 }
 trap cleanup EXIT
 
 echo "→ Отладочная сборка"
 CONFIG=debug APP="$APP" scripts/build-spm.sh >/dev/null
 
-echo "→ Демо-служба (холостой режим)"
-launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || true
 cat > "$WORK/helper.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -34,10 +32,7 @@ cat > "$WORK/helper.plist" <<PLIST
 <key>RunAtLoad</key><true/>
 </dict></plist>
 PLIST
-launchctl bootstrap "gui/$(id -u)" "$WORK/helper.plist"
-sleep 2
 
-echo "→ Демо-правила"
 cat > "$WORK/seed.swift" <<'SWIFT'
 import Foundation
 @objc(RouteHelperProtocol) protocol RouteHelperProtocol {
@@ -59,17 +54,28 @@ RunLoop.main.run(until: Date().addingTimeInterval(60))
 exit(1)
 SWIFT
 swiftc -O "$WORK/seed.swift" -o "$WORK/seed"
-"$WORK/seed" "$LABEL" "$OUT/demo-config.json"
-sleep 3   # даём службе разрешить домены
 
-echo "→ Съёмка окна"
-mkdir -p "$WORK/raw"
-MACOSROUTE_DEV_AGENT=1 MACOSROUTE_SCREENSHOT_DIR="$WORK/raw" MACOSROUTE_SCREENSHOT_DIAGNOSE="dom15.by" \
-    "$APP/Contents/MacOS/MacOSRoute" | grep "screenshot:" || true
+# Для каждого языка — чистая демо-служба со своими правилами и запуск приложения на этом языке
+for lang in en ru; do
+    echo "→ Съёмка ($lang)"
+    launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || true
+    rm -rf "${TMPDIR:-/tmp}/TunnelsideHelperDev"
+    launchctl bootstrap "gui/$(id -u)" "$WORK/helper.plist"
+    sleep 2
+    "$WORK/seed" "$LABEL" "$OUT/demo-config.$lang.json"
+    # Перезапуск, чтобы журнал на скриншоте начинался уже на нужном языке
+    launchctl bootout "gui/$(id -u)/$LABEL"
+    launchctl bootstrap "gui/$(id -u)" "$WORK/helper.plist"
+    sleep 4   # даём службе разрешить домены
 
-for name in rules logs; do
-    for theme in light dark; do
-        [ -f "$WORK/raw/$name-$theme.png" ] && cp "$WORK/raw/$name-$theme.png" "$OUT/ru-$name-$theme.png"
+    mkdir -p "$WORK/raw-$lang"
+    TUNNELSIDE_DEV_AGENT=1 TUNNELSIDE_SCREENSHOT_DIR="$WORK/raw-$lang" TUNNELSIDE_SCREENSHOT_DIAGNOSE="dom15.by" \
+        "$APP/Contents/MacOS/Tunnelside" -AppleLanguages "($lang)" | grep "screenshot:" || true
+
+    for name in rules logs; do
+        for theme in light dark; do
+            [ -f "$WORK/raw-$lang/$name-$theme.png" ] && cp "$WORK/raw-$lang/$name-$theme.png" "$OUT/$lang-$name-$theme.png"
+        done
     done
 done
-ls -1 "$OUT"/ru-*.png
+ls -1 "$OUT"/*.png

@@ -42,7 +42,7 @@ public final class RouteEngine: @unchecked Sendable {
         }
     }
 
-    public let workQueue = DispatchQueue(label: "com.hyperits.app.MacOSRoute.engine")
+    public let workQueue = DispatchQueue(label: "io.github.kirillkarmanov.Tunnelside.engine")
     private let system: RouteSystem
     private let storageDirectory: URL
     private let now: () -> Date
@@ -75,13 +75,14 @@ public final class RouteEngine: @unchecked Sendable {
         applied = Self.load([String: AppliedRoute].self, from: storageDirectory.appendingPathComponent("applied.json")) ?? [:]
         dns = Self.load([String: DNSRecord].self, from: storageDirectory.appendingPathComponent("dns.json")) ?? [:]
         snapshot = HelperState(version: RouteConstants.helperVersion, config: config)
+        AppLanguage.current = config.language ?? .system
     }
 
     public func start() {
         workQueue.async { [self] in
-            log(.info, "Helper \(RouteConstants.helperVersion) запущен, правил: \(config.rules.count), записанных маршрутов: \(applied.count)")
+            log(.info, L("Helper \(RouteConstants.helperVersion) started, rules: \(config.rules.count), recorded routes: \(applied.count)", "Helper \(RouteConstants.helperVersion) запущен, правил: \(config.rules.count), записанных маршрутов: \(applied.count)"))
             networkMonitor = NetworkChangeMonitor(queue: workQueue) { [weak self] in
-                self?.scheduleReconcile(reason: "изменилось состояние сети", delay: 2, forceResolve: true)
+                self?.scheduleReconcile(reason: L("network state changed", "изменилось состояние сети"), delay: 2, forceResolve: true)
             }
             routingMonitor = RoutingTableMonitor(queue: workQueue) { [weak self] in
                 self?.scheduleReconcile(reason: nil, delay: 2, forceResolve: false)
@@ -92,7 +93,7 @@ public final class RouteEngine: @unchecked Sendable {
             timer.setEventHandler { [weak self] in self?.reconcile(reason: nil, forceResolve: false) }
             timer.resume()
             self.timer = timer
-            reconcile(reason: "запуск", forceResolve: false)
+            reconcile(reason: L("startup", "запуск"), forceResolve: false)
         }
     }
 
@@ -112,14 +113,15 @@ public final class RouteEngine: @unchecked Sendable {
             var next = newConfig
             next.sanitize()
             next.revision = config.revision + 1
+            AppLanguage.current = next.language ?? .system
             do {
                 try save(next, to: "config.json")
             } catch {
-                log(.error, "Не удалось сохранить конфигурацию: \(error.localizedDescription)")
-                completion("Не удалось сохранить конфигурацию: \(error.localizedDescription)", false)
+                log(.error, L("Could not save the configuration: \(error.localizedDescription)", "Не удалось сохранить конфигурацию: \(error.localizedDescription)"))
+                completion(L("Could not save the configuration: \(error.localizedDescription)", "Не удалось сохранить конфигурацию: \(error.localizedDescription)"), false)
                 return
             }
-            let reason = next.paused != config.paused ? (next.paused ? "пауза" : "продолжено") : "изменена конфигурация"
+            let reason = next.paused != config.paused ? (next.paused ? L("paused", "пауза") : L("resumed", "продолжено")) : L("configuration changed", "изменена конфигурация")
             config = next
             suspended = false
             lock.lock()
@@ -137,7 +139,7 @@ public final class RouteEngine: @unchecked Sendable {
                 dns[key]?.resolvedAt = nil
                 dns[key]?.retryAfter = nil
             }
-            reconcile(reason: "ручное применение", forceResolve: true)
+            reconcile(reason: L("manual reapply", "ручное применение"), forceResolve: true)
             completion(nil)
         }
     }
@@ -153,7 +155,7 @@ public final class RouteEngine: @unchecked Sendable {
                     failures.append("\(address): \(error)")
                 }
             }
-            log(.info, "Удалены маршруты, добавленные MacOSRoute; синхронизация на паузе")
+            log(.info, L("Removed routes added by Tunnelside; sync is paused", "Удалены маршруты, добавленные Tunnelside; синхронизация на паузе"))
             publish(statuses: [:], network: system.networkSnapshot(preferredInterface: config.interface), applyDate: nil)
             completion(failures.isEmpty ? nil : failures.joined(separator: "\n"))
         }
@@ -165,16 +167,16 @@ public final class RouteEngine: @unchecked Sendable {
             var failures: [String] = []
             for address in addresses {
                 guard applied[address] == nil else {
-                    failures.append("\(address): управляется MacOSRoute — удалите соответствующее правило")
+                    failures.append(L("\(address): managed by Tunnelside — remove the matching rule instead", "\(address): управляется Tunnelside — удалите соответствующее правило"))
                     continue
                 }
                 guard let entry = RoutingTable.exactRoute(for: address, in: table), entry.isStatic else {
-                    failures.append("\(address): не статический маршрут или уже не существует")
+                    failures.append(L("\(address): not a static route or no longer exists", "\(address): не статический маршрут или уже не существует"))
                     continue
                 }
                 switch system.deleteRoute(address) {
                 case .success:
-                    log(.info, "Удалён системный маршрут \(address) → \(entry.gateway ?? entry.interface)")
+                    log(.info, L("Removed system route \(address) → \(entry.gateway ?? entry.interface)", "Удалён системный маршрут \(address) → \(entry.gateway ?? entry.interface)"))
                 case .failure(let error):
                     failures.append("\(address): \(error)")
                 }
@@ -213,12 +215,12 @@ public final class RouteEngine: @unchecked Sendable {
         let previous = currentState().gateway
         if network.physical?.interface != previous?.interface || network.physical?.router != previous?.router {
             if let gw = network.physical {
-                log(.info, "Физический шлюз: \(gw.interface) → \(gw.router)")
+                log(.info, L("Physical gateway: \(gw.interface) → \(gw.router)", "Физический шлюз: \(gw.interface) → \(gw.router)"))
             } else {
-                log(.warning, config.interface == HelperConfig.automaticInterface ? "Не найден доступный физический шлюз" : "У интерфейса \(config.interface) нет доступного шлюза")
+                log(.warning, config.interface == HelperConfig.automaticInterface ? L("No reachable physical gateway found", "Не найден доступный физический шлюз") : L("Interface \(config.interface) has no reachable gateway", "У интерфейса \(config.interface) нет доступного шлюза"))
             }
         }
-        if let reason { log(.info, "Синхронизация маршрутов (\(reason))") }
+        if let reason { log(.info, L("Syncing routes (\(reason))", "Синхронизация маршрутов (\(reason))")) }
 
         if !config.paused {
             resolveDomains(force: forceResolve, network: network)
@@ -232,7 +234,7 @@ public final class RouteEngine: @unchecked Sendable {
             var status = RuleStatus()
             switch TargetParser.parse(rule.target) {
             case nil:
-                status.error = "Некорректный адрес"
+                status.error = L("Invalid address", "Некорректный адрес")
             case .host(let ip):
                 status.addresses = [ip]
             case .network(let net, let prefix):
@@ -243,7 +245,7 @@ public final class RouteEngine: @unchecked Sendable {
                     status.addresses = record.currentAddresses + record.retainedAddresses
                     status.resolvedAt = record.resolvedAt
                     if let error = record.lastError {
-                        if status.addresses.isEmpty { status.error = error } else { status.warning = "\(error), используются прежние адреса" }
+                        if status.addresses.isEmpty { status.error = error } else { status.warning = L("\(error), keeping the previous addresses", "\(error), используются прежние адреса") }
                     }
                 }
             }
@@ -258,7 +260,7 @@ public final class RouteEngine: @unchecked Sendable {
                     for address in status.addresses {
                         if let owner = desired[address] {
                             if owner.hop != hop {
-                                status.warning = "\(address): выход конфликтует с правилом «\(owner.rule.target)», действует правило, стоящее выше"
+                                status.warning = L("\(address): route conflicts with rule “\(owner.rule.target)”; the rule higher in the list wins", "\(address): выход конфликтует с правилом «\(owner.rule.target)», действует правило, стоящее выше")
                             }
                         } else {
                             desired[address] = (hop, rule)
@@ -314,13 +316,13 @@ public final class RouteEngine: @unchecked Sendable {
             switch result {
             case .success:
                 if let existing {
-                    log(.info, "Исправлен маршрут \(address) → \(want.label) (был \(existing.gateway ?? existing.interface))")
+                    log(.info, L("Fixed route \(address) → \(want.label) (was \(existing.gateway ?? existing.interface))", "Исправлен маршрут \(address) → \(want.label) (был \(existing.gateway ?? existing.interface))"))
                 } else {
-                    log(.info, "Добавлен маршрут \(address) → \(want.label)")
+                    log(.info, L("Added route \(address) → \(want.label)", "Добавлен маршрут \(address) → \(want.label)"))
                 }
             case .failure(let error):
                 failed[address] = error.message
-                log(.error, "Не удалось установить маршрут \(address): \(error)")
+                log(.error, L("Could not add route \(address): \(error)", "Не удалось установить маршрут \(address): \(error)"))
                 if existing != nil, let restore = record.restoreGateway {
                     _ = system.addRoute(address, via: NextHop(gateway: restore, interface: nil))
                 }
@@ -349,20 +351,20 @@ public final class RouteEngine: @unchecked Sendable {
     private func removeManagedRoute(_ address: String, table: [RouteEntry]) -> String? {
         guard let record = applied[address] else { return nil }
         if record.adopted == true {
-            log(.info, "Правило удалено, существовавший ранее маршрут \(address) сохранён")
+            log(.info, L("Rule removed; pre-existing route \(address) kept", "Правило удалено, существовавший ранее маршрут \(address) сохранён"))
         } else if let entry = RoutingTable.exactRoute(for: address, in: table), record.owns(entry) {
             if case .failure(let error) = system.deleteRoute(address) {
-                log(.error, "Не удалось удалить маршрут \(address): \(error)")
+                log(.error, L("Could not remove route \(address): \(error)", "Не удалось удалить маршрут \(address): \(error)"))
                 return error.message // запись сохраняем, повтор при следующей синхронизации
             }
             if let restore = record.restoreGateway {
                 if case .failure(let error) = system.addRoute(address, via: NextHop(gateway: restore, interface: nil)) {
-                    log(.warning, "Удалён маршрут \(address), но не удалось восстановить прежний шлюз \(restore): \(error)")
+                    log(.warning, L("Removed route \(address), but could not restore the previous gateway \(restore): \(error)", "Удалён маршрут \(address), но не удалось восстановить прежний шлюз \(restore): \(error)"))
                 } else {
-                    log(.info, "Удалён маршрут \(address), восстановлен прежний шлюз \(restore)")
+                    log(.info, L("Removed route \(address), restored the previous gateway \(restore)", "Удалён маршрут \(address), восстановлен прежний шлюз \(restore)"))
                 }
             } else {
-                log(.info, "Удалён маршрут \(address)")
+                log(.info, L("Removed route \(address)", "Удалён маршрут \(address)"))
             }
         }
         applied[address] = nil
@@ -384,24 +386,24 @@ public final class RouteEngine: @unchecked Sendable {
         case .physical:
             guard let gw = network.physical else {
                 return .failure(RouteToolError(message: config.interface == HelperConfig.automaticInterface
-                    ? "Физический шлюз не найден, сохраняю существующие маршруты" : "У интерфейса \(config.interface) нет шлюза, сохраняю существующие маршруты"))
+                    ? L("Physical gateway not found, keeping existing routes", "Физический шлюз не найден, сохраняю существующие маршруты") : L("Interface \(config.interface) has no gateway, keeping existing routes", "У интерфейса \(config.interface) нет шлюза, сохраняю существующие маршруты")))
             }
             return .success(NextHop(gateway: gw.router, interface: gw.interface, localAddress: gw.localAddress))
         case .interface(let name):
             guard let info = network.interfaces.first(where: { $0.name == name }) else {
-                return .failure(RouteToolError(message: "Интерфейс \(name) не подключён, сохраняю существующие маршруты"))
+                return .failure(RouteToolError(message: L("Interface \(name) is not connected, keeping existing routes", "Интерфейс \(name) не подключён, сохраняю существующие маршруты")))
             }
             if let router = info.router, !info.isVirtual {
                 return .success(NextHop(gateway: router, interface: name, localAddress: info.localAddress))
             }
             return .success(NextHop(gateway: nil, interface: name))
         case .gateway(let ip):
-            guard TargetParser.ipv4Value(ip) != nil else { return .failure(RouteToolError(message: "Некорректный шлюз \(ip)")) }
+            guard TargetParser.ipv4Value(ip) != nil else { return .failure(RouteToolError(message: L("Invalid gateway \(ip)", "Некорректный шлюз \(ip)"))) }
             let info = network.interfaces.first { i in
                 guard let local = i.localAddress, let mask = i.subnetMask else { return false }
                 return TargetParser.sameSubnet(ip, local, mask: mask)
             }
-            guard let info else { return .failure(RouteToolError(message: "Шлюз \(ip) не входит ни в одну текущую сеть, сохраняю существующие маршруты")) }
+            guard let info else { return .failure(RouteToolError(message: L("Gateway \(ip) is not in any current network, keeping existing routes", "Шлюз \(ip) не входит ни в одну текущую сеть, сохраняю существующие маршруты"))) }
             return .success(NextHop(gateway: ip, interface: info.name, localAddress: info.localAddress))
         }
     }
@@ -459,7 +461,7 @@ public final class RouteEngine: @unchecked Sendable {
                     record.lastError = nil
                     record.retryAfter = nil
                     if previous != Set(ips) {
-                        log(.info, "Адреса \(domain): \(ips.joined(separator: ", "))")
+                        log(.info, L("Addresses of \(domain): \(ips.joined(separator: ", "))", "Адреса \(domain): \(ips.joined(separator: ", "))"))
                     }
                 case .failure(let error)?:
                     if record.lastError != error.description {
@@ -517,11 +519,11 @@ public final class RouteEngine: @unchecked Sendable {
     }
 
     private func saveApplied() {
-        do { try save(applied, to: "applied.json") } catch { log(.error, "Не удалось сохранить записи маршрутов: \(error.localizedDescription)") }
+        do { try save(applied, to: "applied.json") } catch { log(.error, L("Could not save route records: \(error.localizedDescription)", "Не удалось сохранить записи маршрутов: \(error.localizedDescription)")) }
     }
 
     private func saveDNS() {
-        do { try save(dns, to: "dns.json") } catch { log(.error, "Не удалось сохранить кеш DNS: \(error.localizedDescription)") }
+        do { try save(dns, to: "dns.json") } catch { log(.error, L("Could not save the DNS cache: \(error.localizedDescription)", "Не удалось сохранить кеш DNS: \(error.localizedDescription)")) }
     }
 
     private func save<T: Encodable>(_ value: T, to name: String) throws {

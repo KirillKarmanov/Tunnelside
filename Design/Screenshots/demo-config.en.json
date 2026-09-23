@@ -1,0 +1,16 @@
+{
+  "revision" : 0,
+  "language" : "en",
+  "dnsMode" : "physical",
+  "dnsRefreshMinutes" : 10,
+  "dnsRetentionHours" : 6,
+  "rules" : [
+    { "id" : "A0000000-0000-0000-0000-000000000001", "target" : "87.232.64.0/24", "group" : "Hosting", "note" : "hoster.by, client sites" },
+    { "id" : "A0000000-0000-0000-0000-000000000002", "target" : "93.125.99.0/24", "group" : "Hosting", "note" : "hoster.by, servers vh117 / vh142" },
+    { "id" : "A0000000-0000-0000-0000-000000000003", "target" : "vh117.hoster.by", "group" : "Hosting", "note" : "SSH and control panel" },
+    { "id" : "A0000000-0000-0000-0000-000000000004", "target" : "dom15.by", "group" : "Sites", "note" : "Client site" },
+    { "id" : "A0000000-0000-0000-0000-000000000005", "target" : "onliner.by", "group" : "Sites", "note" : "Blocked over VPN" },
+    { "id" : "A0000000-0000-0000-0000-000000000006", "target" : "kufar.by", "group" : "Sites", "note" : "Blocked over VPN" },
+    { "id" : "A0000000-0000-0000-0000-000000000007", "target" : "192.168.50.0/24", "group" : "Home", "note" : "NAS and printer", "enabled" : false }
+  ]
+}

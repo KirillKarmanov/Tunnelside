@@ -3,18 +3,18 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.hyperits.app.MacOSRoute.helper</string>
+	<string>io.github.kirillkarmanov.Tunnelside.helper</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Library/PrivilegedHelperTools/com.hyperits.app.MacOSRoute.helper</string>
+		<string>/Library/PrivilegedHelperTools/io.github.kirillkarmanov.Tunnelside.helper</string>
 	</array>
 	<key>AssociatedBundleIdentifiers</key>
 	<array>
-		<string>com.hyperits.app.MacOSRoute</string>
+		<string>io.github.kirillkarmanov.Tunnelside</string>
 	</array>
 	<key>MachServices</key>
 	<dict>
-		<key>com.hyperits.app.MacOSRoute.helper</key>
+		<key>io.github.kirillkarmanov.Tunnelside.helper</key>
 		<true/>
 	</dict>
 	<key>RunAtLoad</key>
@@ -22,6 +22,6 @@
 	<key>KeepAlive</key>
 	<true/>
 	<key>StandardErrorPath</key>
-	<string>/Library/Logs/MacOSRoute/helper.log</string>
+	<string>/Library/Logs/Tunnelside/helper.log</string>
 </dict>
 </plist>

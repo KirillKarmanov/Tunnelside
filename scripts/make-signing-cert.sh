@@ -1,12 +1,12 @@
 #!/bin/bash
-# Создаёт в связке ключей «Вход» самоподписанный сертификат для подписи кода «MacOSRoute Local Signing».
+# Создаёт в связке ключей «Вход» самоподписанный сертификат для подписи кода «Tunnelside Local Signing».
 # Нужен один раз на машину: им подписываются и приложение, и фоновая служба, а служба
 # принимает команды только от приложения с той же подписью.
 # Платный Apple Developer ID не нужен. Закрытый ключ создаётся во временной папке и
 # после импорта удаляется — остаётся только в связке ключей.
 set -euo pipefail
 
-NAME="${SIGN_IDENTITY:-MacOSRoute Local Signing}"
+NAME="${SIGN_IDENTITY:-Tunnelside Local Signing}"
 KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
 
 if security find-certificate -c "$NAME" "$KEYCHAIN" >/dev/null 2>&1; then

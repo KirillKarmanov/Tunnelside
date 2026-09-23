@@ -169,9 +169,9 @@ public enum RouteAnalyzer {
     public static func staleReason(_ entry: RouteEntry, localAddresses: [LocalAddress]) -> String? {
         guard entry.isStatic, entry.hasGateway, !entry.isScoped, !entry.isCloned, let gateway = entry.gateway else { return nil }
         if let ifa = entry.interfaceAddress, !localAddresses.contains(where: { $0.address == ifa }) {
-            return "Локальный адрес \(ifa), к которому привязан маршрут, больше не существует"
+            return L("Local address \(ifa) the route is bound to no longer exists", "Локальный адрес \(ifa), к которому привязан маршрут, больше не существует")
         }
         let reachable = localAddresses.contains { TargetParser.sameSubnet(gateway, $0.address, mask: $0.netmask) }
-        return reachable ? nil : "Шлюз \(gateway) не входит ни в одну текущую сеть"
+        return reachable ? nil : L("Gateway \(gateway) is not in any current network", "Шлюз \(gateway) не входит ни в одну текущую сеть")
     }
 }

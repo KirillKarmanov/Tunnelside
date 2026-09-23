@@ -14,6 +14,6 @@ public protocol RouteHelperProtocol {
     func reapplyAll(withReply reply: @escaping (String?) -> Void)
     /// Удалить все маршруты, добавленные службой, и поставить синхронизацию на паузу (вызывается перед удалением)
     func removeAllRoutes(withReply reply: @escaping (String?) -> Void)
-    /// Удалить статические маршруты, которыми не управляет MacOSRoute (для очистки устаревших маршрутов)
+    /// Удалить статические маршруты, которыми не управляет Tunnelside (для очистки устаревших маршрутов)
     func deleteSystemRoutes(_ addresses: [String], withReply reply: @escaping (String?) -> Void)
 }

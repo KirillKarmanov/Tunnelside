@@ -15,10 +15,10 @@ struct MenuBarView: View {
 
             if client.canModify {
                 HStack {
-                    TextField("Добавить IP / домен", text: $input)
+                    TextField(L("Add IP / domain", "Добавить IP / домен"), text: $input)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit(add)
-                    Button("Добавить", action: add)
+                    Button(L("Add", "Добавить"), action: add)
                         .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
 
@@ -38,20 +38,20 @@ struct MenuBarView: View {
                 }
             } else {
                 Text(statusMessage).foregroundStyle(.secondary)
-                Button(client.status == .notInstalled ? "Установить фоновую службу" : "Обновить фоновую службу") { client.installHelper() }
+                Button(client.status == .notInstalled ? L("Install Background Service", "Установить фоновую службу") : L("Update Background Service", "Обновить фоновую службу")) { client.installHelper() }
                     .disabled(client.isBusy)
             }
 
             Divider()
 
             HStack {
-                Button("Открыть главное окно", action: openMainWindow)
-                Button("Применить заново") { client.reapply() }
+                Button(L("Open Main Window", "Открыть главное окно"), action: openMainWindow)
+                Button(L("Reapply", "Применить заново")) { client.reapply() }
                     .disabled(!client.canModify || client.isBusy)
                 Spacer()
-                Button("Выйти") { NSApp.terminate(nil) }
+                Button(L("Quit", "Выйти")) { NSApp.terminate(nil) }
             }
-            Text("Выход из приложения не затрагивает маршруты — фоновая служба продолжит их поддерживать.")
+            Text(L("Quitting the app does not affect routes — the background service keeps maintaining them.", "Выход из приложения не затрагивает маршруты — фоновая служба продолжит их поддерживать."))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -61,20 +61,20 @@ struct MenuBarView: View {
 
     private var statusMessage: String {
         switch client.status {
-        case .notInstalled: return "Фоновая служба не установлена"
-        case .outdated(let v): return "Нужно обновить фоновую службу (установлена: \(v))"
-        case .checking: return "Подключение к фоновой службе…"
-        default: return "Фоновая служба не работает"
+        case .notInstalled: return L("Background service is not installed", "Фоновая служба не установлена")
+        case .outdated(let v): return L("Background service needs an update (installed: \(v))", "Нужно обновить фоновую службу (установлена: \(v))")
+        case .checking: return L("Connecting to the background service…", "Подключение к фоновой службе…")
+        default: return L("Background service is not running", "Фоновая служба не работает")
         }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("MacOSRoute").font(.headline)
+                Text("Tunnelside").font(.headline)
                 Spacer()
                 if client.canModify {
-                    Toggle(client.isPaused ? "На паузе" : "Работает", isOn: Binding(get: { !client.isPaused }, set: { client.setPaused(!$0) }))
+                    Toggle(client.isPaused ? L("Paused", "На паузе") : L("Running", "Работает"), isOn: Binding(get: { !client.isPaused }, set: { client.setPaused(!$0) }))
                         .toggleStyle(.switch)
                         .controlSize(.mini)
                 }
@@ -83,7 +83,7 @@ struct MenuBarView: View {
                 GatewayLabel().font(.callout)
                 let enabled = client.rules.filter(\.enabled)
                 let ok = enabled.filter { RuleRow(rule: $0, status: client.status(for: $0), paused: client.isPaused).health == .ok }.count
-                Text("Включено правил: \(enabled.count), полностью работают: \(ok)")
+                Text(L("Rules enabled: \(enabled.count), fully working: \(ok)", "Включено правил: \(enabled.count), полностью работают: \(ok)"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -92,7 +92,7 @@ struct MenuBarView: View {
 
     private var groupToggles: some View {
         HStack(spacing: 6) {
-            Text("Группы").font(.caption).foregroundStyle(.secondary)
+            Text(L("Groups", "Группы")).font(.caption).foregroundStyle(.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     ForEach(client.groups, id: \.self) { group in
@@ -108,7 +108,7 @@ struct MenuBarView: View {
                                 .background(on ? Color.accentColor.opacity(0.25) : Color.secondary.opacity(0.12), in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .help(on ? "Нажмите, чтобы выключить группу «\(group)»" : "Нажмите, чтобы включить группу «\(group)»")
+                        .help(on ? L("Click to turn off group “\(group)”", "Нажмите, чтобы выключить группу «\(group)»") : L("Click to turn on group “\(group)”", "Нажмите, чтобы включить группу «\(group)»"))
                     }
                 }
             }
@@ -132,7 +132,7 @@ struct MenuBarView: View {
         }
         .help(row.detailText)
         .contextMenu {
-            Button("Диагностика") {
+            Button(L("Diagnostics", "Диагностика")) {
                 navigation.diagnose(rule.target)
                 openMainWindow()
             }

@@ -3,14 +3,14 @@ import AppKit
 import SwiftUI
 
 /// Только для Debug-сборки: создаёт скриншоты для публикации.
-/// Использование: MACOSROUTE_DEV_AGENT=1 MACOSROUTE_SCREENSHOT_DIR=<папка> MacOSRoute.app/Contents/MacOS/MacOSRoute
+/// Использование: TUNNELSIDE_DEV_AGENT=1 TUNNELSIDE_SCREENSHOT_DIR=<папка> Tunnelside.app/Contents/MacOS/Tunnelside
 /// Приложение по очереди переключает страницы и светлое / тёмное оформление, снимает своё главное окно (разрешение на запись экрана не нужно) и завершается.
 @MainActor
 enum ScreenshotMode {
     private static var started = false
 
     static func startIfRequested(navigation: AppNavigation) {
-        guard !started, let dir = ProcessInfo.processInfo.environment["MACOSROUTE_SCREENSHOT_DIR"] else { return }
+        guard !started, let dir = ProcessInfo.processInfo.environment["TUNNELSIDE_SCREENSHOT_DIR"] else { return }
         started = true
         Task { await run(outputDirectory: URL(fileURLWithPath: dir), navigation: navigation) }
     }
@@ -30,7 +30,7 @@ enum ScreenshotMode {
             NSApp.appearance = NSAppearance(named: appearance)
             for (section, name) in pages {
                 if section == .diagnostics {
-                    navigation.diagnose(ProcessInfo.processInfo.environment["MACOSROUTE_SCREENSHOT_DIAGNOSE"] ?? "www.baidu.com")
+                    navigation.diagnose(ProcessInfo.processInfo.environment["TUNNELSIDE_SCREENSHOT_DIAGNOSE"] ?? "example.com")
                 } else {
                     navigation.section = section
                 }

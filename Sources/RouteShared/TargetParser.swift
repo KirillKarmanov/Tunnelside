@@ -9,8 +9,8 @@ public enum RouteTarget: Equatable, Sendable {
     public var kindLabel: String {
         switch self {
         case .host: return "IP"
-        case .network: return "Подсеть"
-        case .domain: return "Домен"
+        case .network: return L("Subnet", "Подсеть")
+        case .domain: return L("Domain", "Домен")
         }
     }
 }

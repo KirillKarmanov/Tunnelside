@@ -3,13 +3,20 @@ import RouteShared
 import SwiftUI
 
 @main
-struct MacOSRouteApp: App {
+struct TunnelsideApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var client = HelperClient()
-    @StateObject private var navigation = AppNavigation()
+    @StateObject private var client: HelperClient
+    @StateObject private var navigation: AppNavigation
+
+    init() {
+        // До создания первых экранов: все тексты интерфейса берутся через L(...)
+        AppLanguage.current = .system
+        _client = StateObject(wrappedValue: HelperClient())
+        _navigation = StateObject(wrappedValue: AppNavigation())
+    }
 
     var body: some Scene {
-        Window("MacOSRoute", id: AppWindow.mainID) {
+        Window("Tunnelside", id: AppWindow.mainID) {
             MainView()
                 .environmentObject(client)
                 .environmentObject(navigation)

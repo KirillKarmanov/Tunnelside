@@ -10,8 +10,8 @@ enum HelperInstaller {
 
         var errorDescription: String? {
             switch self {
-            case .cancelled: return "Пользователь отменил авторизацию"
-            case .missingResource(let name): return "В пакете приложения нет \(name) — соберите его скриптом scripts/build-spm.sh"
+            case .cancelled: return L("Authorization was cancelled", "Пользователь отменил авторизацию")
+            case .missingResource(let name): return L("\(name) is missing from the app bundle — build it with scripts/build-spm.sh", "В пакете приложения нет \(name) — соберите его скриптом scripts/build-spm.sh")
             case .failed(let message): return message
             }
         }
@@ -30,6 +30,12 @@ enum HelperInstaller {
         set -e
         \(legacyCleanupScript)
         /bin/launchctl bootout system/\(label) >/dev/null 2>&1 || true
+        if [ -d \(q(RouteConstants.legacySupportDirectory)) ] && [ ! -e \(q(RouteConstants.supportDirectory)) ]; then
+          # Сбой копирования не должен прервать установку: без переноса служба просто начнёт с пустыми правилами
+          /bin/cp -Rp \(q(RouteConstants.legacySupportDirectory)) \(q(RouteConstants.supportDirectory + ".migrating")) \
+            && /bin/mv \(q(RouteConstants.supportDirectory + ".migrating")) \(q(RouteConstants.supportDirectory)) \
+            || /bin/rm -rf \(q(RouteConstants.supportDirectory + ".migrating"))
+        fi
         /bin/mkdir -p /Library/PrivilegedHelperTools \(q(RouteConstants.supportDirectory)) \(q((RouteConstants.helperLogPath as NSString).deletingLastPathComponent))
         /bin/cp -f \(q(helper.path)) \(q(RouteConstants.helperInstallPath))
         /usr/sbin/chown root:wheel \(q(RouteConstants.helperInstallPath))
@@ -46,7 +52,7 @@ enum HelperInstaller {
         try await runPrivileged(script)
     }
 
-    /// Удалить службу, сохранив правила в /Library/Application Support/MacOSRoute
+    /// Удалить службу, сохранив правила в /Library/Application Support/Tunnelside
     static func uninstall() async throws {
         let script = """
         \(legacyCleanupScript)
@@ -56,7 +62,7 @@ enum HelperInstaller {
         try await runPrivileged(script)
     }
 
-    /// Остановить и удалить службу со старым идентификатором. Папка с правилами от идентификатора не зависит — новая служба подхватит её сразу.
+    /// Остановить и удалить службу со старым идентификатором (в том числе от MacOSRoute). Её маршруты остаются в системе: правила и записи о маршрутах переносятся при установке, и новая служба управляет ими дальше.
     private static var legacyCleanupScript: String {
         RouteConstants.legacyHelperLabels.map { label in
             """
@@ -75,7 +81,7 @@ enum HelperInstaller {
         let escaped = shellScript
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
-        let appleScript = "do shell script \"\(escaped)\" with prompt \"MacOSRoute устанавливает фоновую службу для управления маршрутами.\" with administrator privileges"
+        let appleScript = "do shell script \"\(escaped)\" with prompt \"\(L("Tunnelside is installing a background service to manage routes.", "Tunnelside устанавливает фоновую службу для управления маршрутами."))\" with administrator privileges"
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             let process = Process()

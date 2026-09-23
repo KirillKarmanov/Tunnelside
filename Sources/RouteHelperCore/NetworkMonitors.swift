@@ -15,7 +15,7 @@ public final class NetworkChangeMonitor {
             guard let info else { return }
             Unmanaged<NetworkChangeMonitor>.fromOpaque(info).takeUnretainedValue().onChange()
         }
-        guard let store = SCDynamicStoreCreate(nil, "MacOSRouteMonitor" as CFString, callback, &context) else { return }
+        guard let store = SCDynamicStoreCreate(nil, "TunnelsideMonitor" as CFString, callback, &context) else { return }
         let keys = ["State:/Network/Global/IPv4"] as CFArray
         let patterns = ["State:/Network/Service/[^/]+/IPv4", "State:/Network/Service/[^/]+/DNS", "State:/Network/Interface/[^/]+/Link"] as CFArray
         SCDynamicStoreSetNotificationKeys(store, keys, patterns)

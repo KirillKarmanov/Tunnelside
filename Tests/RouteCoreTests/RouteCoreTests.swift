@@ -149,7 +149,7 @@ final class DNSMessageTests {
         // A: 93.184.216.34
         response += [0xC0, 0x10, 0, 1, 0, 1, 0, 0, 0, 60, 0, 4, 93, 184, 216, 34]
         XCTAssertEqual(DNSMessage.parseA(response, expectedID: 0x1234), .success(["93.184.216.34"]))
-        XCTAssertEqual(DNSMessage.parseA(response, expectedID: 0x9999), .failure(.failed("ID не совпадает")))
+        XCTAssertEqual(DNSMessage.parseA(response, expectedID: 0x9999), .failure(.idMismatch))
 
         var nx = query
         nx[2] = 0x81; nx[3] = 0x83
@@ -255,23 +255,28 @@ final class RouteEngineTests {
     var clock: Clock!
 
     init() {
-        storage = FileManager.default.temporaryDirectory.appendingPathComponent("MacOSRouteTests-\(UUID().uuidString)")
+        storage = FileManager.default.temporaryDirectory.appendingPathComponent("TunnelsideTests-\(UUID().uuidString)")
         system = FakeSystem(network: Self.wifi)
         clock = Clock()
     }
 
     deinit {
         try? FileManager.default.removeItem(at: storage)
+        AppLanguage.current = .en
     }
 
     private func makeEngine() -> RouteEngine {
         let clock = self.clock!
-        return RouteEngine(storageDirectory: storage, system: system, now: { clock.date })
+        let engine = RouteEngine(storageDirectory: storage, system: system, now: { clock.date })
+        // Без языка в конфигурации служба берёт язык системы — тесты не должны от него зависеть
+        if engine.currentState().config.language == nil { AppLanguage.current = .en }
+        return engine
     }
 
     @discardableResult
     private func update(_ engine: RouteEngine, _ body: (inout HelperConfig) -> Void) -> Bool {
         var config = engine.currentState().config
+        if config.language == nil { config.language = .en }
         body(&config)
         var conflict = false
         engine.updateConfig(config) { _, c in conflict = c }
@@ -337,6 +342,33 @@ final class RouteEngineTests {
         XCTAssertEqual(system.table["1.2.3.4"]?.interfaceAddress, "192.168.1.27")
     }
 
+    // Язык меняется глобально, поэтому эти тесты живут в сериализованном наборе движка
+    @Test func testMessagesFollowConfigLanguage() {
+        let engine = makeEngine()
+        let rule = RouteRule(target: "1.2.3.4")
+        update(engine) { $0.rules = [rule]; $0.language = .ru }
+        XCTAssertEqual(AppLanguage.current, .ru)
+
+        system.network = Self.offline
+        engine.reconcileNow()
+        XCTAssertTrue(status(engine, rule)?.error?.contains("сохраняю") ?? false)
+
+        update(engine) { $0.language = .en }
+        XCTAssertEqual(AppLanguage.current, .en)
+        XCTAssertTrue(status(engine, rule)?.error?.contains("keeping") ?? false)
+    }
+
+    @Test func testLanguageSurvivesRestart() throws {
+        let legacy = try RouteJSON.decoder().decode(HelperConfig.self, from: Data(#"{"rules":[]}"#.utf8))
+        XCTAssertNil(legacy.language, "В конфигурации MacOSRoute языка нет — служба возьмёт язык системы")
+
+        update(makeEngine()) { $0.language = .ru }
+        AppLanguage.current = .en
+        _ = makeEngine()
+        XCTAssertEqual(AppLanguage.current, .ru, "Служба после перезапуска пишет на сохранённом языке")
+        XCTAssertEqual(L("Rules", "Правила"), "Правила")
+    }
+
     @Test func testKeepsRoutesWhileOffline() {
         let engine = makeEngine()
         let rule = RouteRule(target: "1.2.3.4")
@@ -345,7 +377,7 @@ final class RouteEngineTests {
         system.network = Self.offline
         engine.reconcileNow()
         XCTAssertNotNil(system.table["1.2.3.4"], "Без сети маршрут удалять нельзя")
-        XCTAssertTrue(status(engine, rule)?.error?.contains("сохраняю") ?? false)
+        XCTAssertTrue(status(engine, rule)?.error?.contains("keeping") ?? false)
 
         system.network = Self.hotspot
         engine.reconcileNow()

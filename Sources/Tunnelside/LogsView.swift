@@ -16,14 +16,14 @@ struct LogsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Toggle("Только предупреждения и ошибки", isOn: $onlyProblems)
+                Toggle(L("Warnings and errors only", "Только предупреждения и ошибки"), isOn: $onlyProblems)
                 Spacer()
-                Text("Записей: \(logs.count) · полный журнал: \(RouteConstants.helperLogPath)")
+                Text(L("Entries: \(logs.count) · full log: \(RouteConstants.helperLogPath)", "Записей: \(logs.count) · полный журнал: \(RouteConstants.helperLogPath)"))
                     .foregroundStyle(.secondary)
-                Button("Показать в Finder") {
+                Button(L("Show in Finder", "Показать в Finder")) {
                     NSWorkspace.shared.selectFile(RouteConstants.helperLogPath, inFileViewerRootedAtPath: "")
                 }
-                Button("Копировать") {
+                Button(L("Copy", "Копировать")) {
                     let text = logs.reversed().map { "\($0.date.formatted(date: .numeric, time: .standard)) [\($0.level.rawValue)] \($0.message)" }.joined(separator: "\n")
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
@@ -42,7 +42,7 @@ struct LogsView: View {
                 }
             }
         }
-        .searchable(text: $search, prompt: "Поиск по журналу")
+        .searchable(text: $search, prompt: L("Search log", "Поиск по журналу"))
     }
 
     private func symbol(_ level: LogEntry.Level) -> String {

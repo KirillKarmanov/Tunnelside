@@ -8,14 +8,17 @@ public enum ResolveError: Error, Equatable, Sendable, CustomStringConvertible {
     case notFound
     case fakeIP([String])
     case noServers
+    /// Ответ на чужой запрос (не совпал ID) — такой ответ пропускается
+    case idMismatch
 
     public var description: String {
         switch self {
-        case .failed(let msg): return "Не удалось разрешить домен: \(msg)"
-        case .timeout: return "Тайм-аут разрешения домена"
-        case .notFound: return "Домен не существует или у него нет IPv4-адресов"
-        case .fakeIP(let ips): return "Домен разрешился в Fake-IP прокси (\(ips.first ?? "")) — укажите в настройках DNS физической сети"
-        case .noServers: return "Нет доступных DNS-серверов"
+        case .failed(let msg): return L("Could not resolve the domain: \(msg)", "Не удалось разрешить домен: \(msg)")
+        case .timeout: return L("Domain resolution timed out", "Тайм-аут разрешения домена")
+        case .notFound: return L("The domain does not exist or has no IPv4 addresses", "Домен не существует или у него нет IPv4-адресов")
+        case .fakeIP(let ips): return L("The domain resolved to a proxy Fake-IP (\(ips.first ?? "")) — switch DNS to the physical network in Settings", "Домен разрешился в Fake-IP прокси (\(ips.first ?? "")) — укажите в настройках DNS физической сети")
+        case .noServers: return L("No DNS servers available", "Нет доступных DNS-серверов")
+        case .idMismatch: return L("Could not resolve the domain: ID mismatch", "Не удалось разрешить домен: ID не совпадает")
         }
     }
 }
@@ -109,9 +112,9 @@ public enum DNSClient {
     }
 
     static func query(_ name: String, server: String, interface: String?, timeout: TimeInterval) -> Result<[String], ResolveError> {
-        guard let serverValue = TargetParser.ipv4Value(server) else { return .failure(.failed("Некорректный DNS-сервер \(server)")) }
+        guard let serverValue = TargetParser.ipv4Value(server) else { return .failure(.failed(L("Invalid DNS server \(server)", "Некорректный DNS-сервер \(server)"))) }
         let id = UInt16.random(in: 1...UInt16.max)
-        guard let packet = DNSMessage.query(id: id, name: name) else { return .failure(.failed("Некорректный домен")) }
+        guard let packet = DNSMessage.query(id: id, name: name) else { return .failure(.failed(L("Invalid domain", "Некорректный домен"))) }
 
         let fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
         guard fd >= 0 else { return .failure(.failed(String(cString: strerror(errno)))) }
@@ -119,7 +122,7 @@ public enum DNSClient {
 
         if let interface {
             var index = if_nametoindex(interface)
-            guard index != 0 else { return .failure(.failed("Интерфейс \(interface) не существует")) }
+            guard index != 0 else { return .failure(.failed(L("Interface \(interface) does not exist", "Интерфейс \(interface) не существует"))) }
             setsockopt(fd, IPPROTO_IP, IP_BOUND_IF, &index, socklen_t(MemoryLayout<UInt32>.size))
         }
 
@@ -147,7 +150,7 @@ public enum DNSClient {
             let n = recv(fd, &response, response.count, 0)
             guard n > 0 else { return .failure(.failed(String(cString: strerror(errno)))) }
             let result = DNSMessage.parseA(Array(response[0..<n]), expectedID: id)
-            if case .failure(.failed("ID не совпадает")) = result { continue }
+            if case .failure(.idMismatch) = result { continue }
             return result
         }
     }
@@ -167,23 +170,23 @@ public enum DNSMessage {
     }
 
     public static func parseA(_ data: [UInt8], expectedID: UInt16) -> Result<[String], ResolveError> {
-        guard data.count >= 12 else { return .failure(.failed("Слишком короткий ответ")) }
+        guard data.count >= 12 else { return .failure(.failed(L("Response too short", "Слишком короткий ответ"))) }
         let id = UInt16(data[0]) << 8 | UInt16(data[1])
-        guard id == expectedID else { return .failure(.failed("ID не совпадает")) }
+        guard id == expectedID else { return .failure(.idMismatch) }
         let flags = UInt16(data[2]) << 8 | UInt16(data[3])
-        guard flags & 0x8000 != 0 else { return .failure(.failed("Это не DNS-ответ")) }
+        guard flags & 0x8000 != 0 else { return .failure(.failed(L("Not a DNS response", "Это не DNS-ответ"))) }
         switch flags & 0x000F {
         case 0: break
         case 3: return .failure(.notFound)
-        case let rcode: return .failure(.failed("Код ошибки DNS \(rcode)"))
+        case let rcode: return .failure(.failed(L("DNS error code \(rcode)", "Код ошибки DNS \(rcode)")))
         }
-        if flags & 0x0200 != 0 { return .failure(.failed("Ответ обрезан")) }
+        if flags & 0x0200 != 0 { return .failure(.failed(L("Response truncated", "Ответ обрезан"))) }
 
         let qdcount = Int(UInt16(data[4]) << 8 | UInt16(data[5]))
         let ancount = Int(UInt16(data[6]) << 8 | UInt16(data[7]))
         var offset = 12
         for _ in 0..<qdcount {
-            guard let next = skipName(data, offset), next + 4 <= data.count else { return .failure(.failed("Неверный формат ответа")) }
+            guard let next = skipName(data, offset), next + 4 <= data.count else { return .failure(.failed(L("Malformed response", "Неверный формат ответа"))) }
             offset = next + 4
         }
         var ips: [String] = []

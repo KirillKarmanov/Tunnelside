@@ -22,7 +22,8 @@ final class HelperService: NSObject, RouteHelperProtocol {
 
     func updateConfig(_ configData: Data, withReply reply: @escaping (String?, Bool) -> Void) {
         guard let config = try? RouteJSON.decoder().decode(HelperConfig.self, from: configData) else {
-            reply("Некорректный формат конфигурации", false)
+            // Язык меняется на workQueue — читаем его там же
+            engine.workQueue.async { reply(L("Invalid configuration format", "Некорректный формат конфигурации"), false) }
             return
         }
         engine.updateConfig(config, completion: reply)
@@ -53,12 +54,12 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
         // Подключаться могут только администраторы (они и так могут менять маршруты через sudo)
         guard isAdministrator(uid: connection.effectiveUserIdentifier) else {
-            FileHandle.standardError.write(Data("Отклонено подключение не-администратора uid=\(connection.effectiveUserIdentifier)\n".utf8))
+            FileHandle.standardError.write(Data("Rejected connection from non-admin uid=\(connection.effectiveUserIdentifier)\n".utf8))
             return false
         }
         if requireSignedClient {
             guard let requirement = Self.clientRequirement else {
-                FileHandle.standardError.write(Data("Отказ: служба собрана без сертификата, проверить клиента нечем\n".utf8))
+                FileHandle.standardError.write(Data("Rejected: the helper was built without a certificate, so clients cannot be verified\n".utf8))
                 return false
             }
             connection.setCodeSigningRequirement(requirement)
@@ -69,7 +70,7 @@ final class ListenerDelegate: NSObject, NSXPCListenerDelegate {
         return true
     }
 
-    /// Клиент обязан быть приложением MacOSRoute, подписанным тем же сертификатом, что и эта служба.
+    /// Клиент обязан быть приложением Tunnelside, подписанным тем же сертификатом, что и эта служба.
     /// Сертификат Apple Developer → проверка по Team ID; собственный (самоподписанный) сертификат →
     /// проверка по SHA-1 листового сертификата. Одного bundle ID мало: его подделает любая
     /// программа через `codesign -s - --identifier …`. Служба без сертификата (ad-hoc)
@@ -124,7 +125,7 @@ let arguments = CommandLine.arguments
 
 if arguments.contains("--print-client-requirement") {
     guard let requirement = ListenerDelegate.clientRequirement else {
-        print("нет: служба не подписана сертификатом, клиенты будут отклоняться")
+        print("none: the helper is not signed with a certificate, all clients will be rejected")
         exit(1)
     }
     print(requirement)
@@ -141,7 +142,7 @@ if arguments.contains("--print-gateway") {
         print("physical: interface=\(gw.interface) router=\(gw.router)")
         exit(0)
     }
-    print("Физический шлюз не найден")
+    print("Physical gateway not found")
     exit(1)
 }
 
@@ -162,7 +163,7 @@ let isRoot = getuid() == 0
 // Для отладки: без root хранить данные во временной папке и не вызывать route
 let storage = isRoot
     ? URL(fileURLWithPath: RouteConstants.supportDirectory)
-    : FileManager.default.temporaryDirectory.appendingPathComponent("MacOSRouteHelperDev")
+    : FileManager.default.temporaryDirectory.appendingPathComponent("TunnelsideHelperDev")
 
 let engine = RouteEngine(storageDirectory: storage, system: LiveRouteSystem(dryRun: !isRoot))
 engine.start()

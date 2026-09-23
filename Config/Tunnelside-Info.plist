@@ -25,8 +25,13 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Диагностика обращается к DNS-серверу текущей сети, чтобы сравнить адреса домена через VPN и напрямую.</string>
+	<string>Diagnostics queries the current network’s DNS server to compare a domain’s addresses through the VPN and directly.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>© 2026 Chongqing Hyperits Network Technology Co., Ltd.</string>
+	<string>© 2026 Kirill Karmanov. Based on MacOSRoute © 2026 Chongqing Hyperits Network Technology Co., Ltd.</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ru</string>
+	</array>
 </dict>
 </plist>

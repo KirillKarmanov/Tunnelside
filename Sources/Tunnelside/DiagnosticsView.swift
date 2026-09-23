@@ -30,14 +30,14 @@ struct DiagnosticReport: Sendable {
         var addresses: [(String, String)] = []
         switch parsed {
         case .host(let ip):
-            addresses = [(ip, "Ввод")]
+            addresses = [(ip, L("Input", "Ввод"))]
         case .network(let net, let prefix):
-            addresses = [("\(net)/\(prefix)", "Ввод")]
+            addresses = [("\(net)/\(prefix)", L("Input", "Ввод"))]
         case .domain(let domain):
             report.physicalDNS = DNSResolver.resolve(domain, mode: .physical, customServers: [], physical: snapshot.physicalInterface)
             report.systemDNS = DNSResolver.resolveSystem(domain)
-            if case .success(let ips) = report.physicalDNS { addresses += ips.map { ($0, "DNS физической сети") } }
-            if case .success(let ips) = report.systemDNS { addresses += ips.map { ($0, "Системный DNS") } }
+            if case .success(let ips) = report.physicalDNS { addresses += ips.map { ($0, L("Physical network DNS", "DNS физической сети")) } }
+            if case .success(let ips) = report.systemDNS { addresses += ips.map { ($0, L("System DNS", "Системный DNS")) } }
         }
 
         var merged: [(String, [String])] = []
@@ -63,7 +63,7 @@ enum TCPProbe {
         case failed(String)
         var description: String {
             switch self {
-            case .timeout: return "Тайм-аут соединения"
+            case .timeout: return L("Connection timed out", "Тайм-аут соединения")
             case .failed(let m): return m
             }
         }
@@ -71,7 +71,7 @@ enum TCPProbe {
 
     /// Возвращает время установки TCP-соединения (мс)
     static func connect(_ ip: String, port: UInt16, timeout: TimeInterval) -> Result<Double, ProbeError> {
-        guard let value = TargetParser.ipv4Value(ip) else { return .failure(.failed("Некорректный адрес")) }
+        guard let value = TargetParser.ipv4Value(ip) else { return .failure(.failed(L("Invalid address", "Некорректный адрес"))) }
         let fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         guard fd >= 0 else { return .failure(.failed(String(cString: strerror(errno)))) }
         defer { close(fd) }
@@ -110,15 +110,15 @@ struct DiagnosticsView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                TextField("Введите IP, подсеть или домен — покажем, через какой интерфейс идёт трафик", text: $navigation.diagnosticsTarget)
+                TextField(L("Enter an IP, subnet or domain to see which interface its traffic takes", "Введите IP, подсеть или домен — покажем, через какой интерфейс идёт трафик"), text: $navigation.diagnosticsTarget)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(run)
-                Text("TCP-порт")
+                Text(L("TCP port", "TCP-порт"))
                 TextField("443", text: $portText)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 60)
                 Button(action: run) {
-                    if running { ProgressView().controlSize(.small) } else { Text("Проверить") }
+                    if running { ProgressView().controlSize(.small) } else { Text(L("Check", "Проверить")) }
                 }
                 .disabled(running || navigation.diagnosticsTarget.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -126,12 +126,12 @@ struct DiagnosticsView: View {
             Divider()
 
             if invalid {
-                ContentUnavailableView("Некорректный адрес", systemImage: "questionmark.circle")
+                ContentUnavailableView(L("Invalid address", "Некорректный адрес"), systemImage: "questionmark.circle")
             } else if let report {
                 ScrollView { reportView(report).padding(16) }
             } else {
-                ContentUnavailableView("Диагностика связи", systemImage: "stethoscope",
-                                       description: Text("Сравнивает адреса от системного DNS и DNS физической сети,\nпоказывает интерфейс и шлюз для каждого адреса и проверяет TCP-соединение."))
+                ContentUnavailableView(L("Connection Diagnostics", "Диагностика связи"), systemImage: "stethoscope",
+                                       description: Text(L("Compares addresses from the system DNS and the physical network DNS,\nshows the interface and gateway for each address, and tests a TCP connection.", "Сравнивает адреса от системного DNS и DNS физической сети,\nпоказывает интерфейс и шлюз для каждого адреса и проверяет TCP-соединение.")))
             }
         }
         .onChange(of: navigation.diagnosticsRequest) { run() }
@@ -160,12 +160,12 @@ struct DiagnosticsView: View {
             summary(report)
 
             if report.systemDNS != nil || report.physicalDNS != nil {
-                GroupBox("Разрешение DNS") {
+                GroupBox(L("DNS Resolution", "Разрешение DNS")) {
                     VStack(alignment: .leading, spacing: 6) {
-                        dnsLine("DNS физической сети", report.physicalDNS)
-                        dnsLine("Системный DNS", report.systemDNS)
+                        dnsLine(L("Physical network DNS", "DNS физической сети"), report.physicalDNS)
+                        dnsLine(L("System DNS", "Системный DNS"), report.systemDNS)
                         if case .success(let a)? = report.physicalDNS, case .success(let b)? = report.systemDNS, Set(a).isDisjoint(with: b) {
-                            Label("Ответы двух DNS полностью различаются: системный DNS, возможно, перехвачен VPN или прокси. MacOSRoute по умолчанию использует DNS физической сети.", systemImage: "info.circle")
+                            Label(L("The two DNS answers are completely different: the system DNS may be intercepted by a VPN or proxy. By default Tunnelside uses the physical network DNS.", "Ответы двух DNS полностью различаются: системный DNS, возможно, перехвачен VPN или прокси. Tunnelside по умолчанию использует DNS физической сети."), systemImage: "info.circle")
                                 .font(.callout)
                                 .foregroundStyle(.orange)
                         }
@@ -175,10 +175,10 @@ struct DiagnosticsView: View {
                 }
             }
 
-            GroupBox("Маршруты и связь") {
+            GroupBox(L("Routes and Connectivity", "Маршруты и связь")) {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
                     GridRow {
-                        Text("Адрес"); Text("Источник"); Text("Интерфейс"); Text("Шлюз"); Text("Маршрут"); Text("TCP")
+                        Text(L("Address", "Адрес")); Text(L("Source", "Источник")); Text(L("Interface", "Интерфейс")); Text(L("Gateway", "Шлюз")); Text(L("Route", "Маршрут")); Text("TCP")
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -203,11 +203,11 @@ struct DiagnosticsView: View {
             }
 
             let matched = matchingRules(report)
-            GroupBox("Правила MacOSRoute") {
+            GroupBox(L("Tunnelside Rules", "Правила Tunnelside")) {
                 VStack(alignment: .leading, spacing: 6) {
                     if matched.isEmpty {
-                        Text("Ни одно правило не охватывает эти адреса.").foregroundStyle(.secondary)
-                        Button("Добавить правило (через физический шлюз)") {
+                        Text(L("No rule covers these addresses.", "Ни одно правило не охватывает эти адреса.")).foregroundStyle(.secondary)
+                        Button(L("Add Rule (via Physical Gateway)", "Добавить правило (через физический шлюз)")) {
                             client.addTargets(from: report.target)
                             navigation.section = .rules
                         }
@@ -241,13 +241,13 @@ struct DiagnosticsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(report.target).font(.title3.bold()).textSelection(.enabled)
                 if total == 0 {
-                    Text("Нет адресов для проверки")
+                    Text(L("No addresses to check", "Нет адресов для проверки"))
                 } else if ok {
-                    Text("Все адреса (\(total)) идут через физический интерфейс \(physical ?? "")")
+                    Text(L("All addresses (\(total)) go through the physical interface \(physical ?? "")", "Все адреса (\(total)) идут через физический интерфейс \(physical ?? "")"))
                 } else {
-                    Text("\(total - viaPhysical) из \(total) адресов идут не через физический интерфейс\(physical.map { " \($0)" } ?? "")")
+                    Text(L("\(total - viaPhysical) of \(total) addresses do not go through the physical interface\(physical.map { " \($0)" } ?? "")", "\(total - viaPhysical) из \(total) адресов идут не через физический интерфейс\(physical.map { " \($0)" } ?? "")"))
                 }
-                Text("\(report.kind) · проверено в \(report.finishedAt.formatted(date: .omitted, time: .standard))")
+                Text(L("\(report.kind) · checked at \(report.finishedAt.formatted(date: .omitted, time: .standard))", "\(report.kind) · проверено в \(report.finishedAt.formatted(date: .omitted, time: .standard))"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

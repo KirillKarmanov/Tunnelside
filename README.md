@@ -1,124 +1,129 @@
-# MacOSRoute
+# Tunnelside
 
-Утилита для строки меню macOS: выбранные домены, IP-адреса и подсети идут **мимо VPN** — напрямую через роутер вашей сети. Остальной трафик остаётся в туннеле.
+**English** · [Русский](README.ru.md)
+
+A macOS menu bar utility that sends selected domains, IP addresses and subnets **around your VPN** — straight through your local network's router. Everything else stays in the tunnel.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="Design/Screenshots/ru-rules-dark.png">
-  <img alt="Окно MacOSRoute: список правил" src="Design/Screenshots/ru-rules-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="Design/Screenshots/en-rules-dark.png">
+  <img alt="Tunnelside window: the list of rules" src="Design/Screenshots/en-rules-light.png">
 </picture>
 
-## Зачем
+## Why
 
-VPN вроде WireGuard с `AllowedIPs = 0.0.0.0/0` заворачивает в туннель весь трафик. Часть сайтов и серверов через него не открывается: белорусские хостинги, сайты, которые режут иностранные IP, серверы, куда нужно ходить по SSH со своего адреса. Приходится либо выключать VPN, либо вручную прописывать маршрут:
+A VPN such as WireGuard with `AllowedIPs = 0.0.0.0/0` pushes all traffic into the tunnel. Some sites and servers don't work through it: local hosting providers, sites that block foreign IPs, servers you must reach over SSH from your own address. So you either turn the VPN off or add a route by hand:
 
 ```bash
 sudo route -n add -host 87.232.64.100 192.168.1.1
 ```
 
-MacOSRoute делает то же самое автоматически. Вы добавляете домен или адрес, а приложение само узнаёт его IP, находит шлюз текущей сети, прокладывает маршрут и следит, чтобы он не пропал.
+Tunnelside does the same thing automatically. You add a domain or an address; the app resolves its IPs, finds the gateway of the current network, adds the route and keeps it in place.
 
-Исключить адреса из туннеля средствами самого WireGuard нельзя: в его конфиге нет такой настройки, а приложение WireGuard из App Store не принимает скрипты `PostUp`/`PostDown`. Отдельный маршрут через шлюз сети — единственный рабочий способ.
+WireGuard itself cannot exclude addresses from the tunnel: its config has no such option, and the App Store WireGuard app does not run `PostUp`/`PostDown` scripts. A separate route through the network gateway is the working way.
 
-## Возможности
+## Features
 
-- **Правила** — домен, IP или подсеть (CIDR). У каждого правила свой переключатель, заметка и группа; группу можно включить или выключить целиком. Можно вставить сразу несколько адресов через пробел или запятую, а также ссылку целиком: из `https://example.by/page` возьмётся только домен.
-- **Домены** — адреса домена запрашиваются через DNS вашей сети, а не через VPN, и обновляются каждые 10 минут (настраивается от 1 минуты до суток). Если у домена сменился IP, старый адрес ещё 6 часов остаётся в маршрутах (настраивается от 0 до 168 часов), чтобы не обрывались открытые соединения.
-- **Смена сети** — шлюз определяется автоматически при каждой проверке. Сменили Wi‑Fi, подключили кабель, вывели Mac из сна — маршруты перестраиваются на новый шлюз. Фоновая служба следит за изменениями сети и таблицы маршрутов и дополнительно сверяет всё раз в 30 секунд.
-- **Бережность к чужим маршрутам** — если такой же маршрут уже был в системе (например, прописанный вручную), при удалении правила он остаётся на месте.
-- **Таблица маршрутов** — вся IPv4-таблица ядра с поиском устаревших статических маршрутов.
-- **Диагностика** — через какой интерфейс и шлюз реально идёт адрес, что отвечает DNS через VPN и напрямую, проходит ли TCP-соединение.
-- **Журнал** — все добавления и удаления маршрутов, адреса доменов, смены шлюза.
+- **Rules** — a domain, an IP or a subnet (CIDR). Each rule has its own switch, a note and a group; a whole group can be turned on or off at once. Paste several addresses separated by spaces or commas, or a full link: only the domain is taken from `https://example.com/page`.
+- **Domains** — addresses are resolved through your network's DNS, not through the VPN, and refreshed every 10 minutes (from 1 minute to 1 day). When a domain's IP changes, the old address stays routed for 6 more hours (0 to 168 hours) so open connections don't break.
+- **Network changes** — the gateway is detected on every check. Switch Wi‑Fi, plug in a cable, wake the Mac — routes move to the new gateway. The background service watches network and routing table changes and also re-checks everything every 30 seconds.
+- **Respects existing routes** — if the same route already existed (for example, added by hand), it stays when the rule is removed.
+- **Routing table** — the whole IPv4 kernel table, with a search for stale static routes.
+- **Diagnostics** — which interface and gateway an address really uses, what DNS answers through the VPN and directly, whether a TCP connection goes through.
+- **Log** — every route added or removed, domain addresses, gateway changes.
+- **English and Russian** — the app follows the system language.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="Design/Screenshots/ru-logs-dark.png">
-  <img alt="Окно MacOSRoute: журнал" src="Design/Screenshots/ru-logs-light.png">
+  <source media="(prefers-color-scheme: dark)" srcset="Design/Screenshots/en-logs-dark.png">
+  <img alt="Tunnelside window: the log" src="Design/Screenshots/en-logs-light.png">
 </picture>
 
-## Установка
+## Install
 
-Нужны macOS 14 или новее и Command Line Tools. **Xcode не нужен.** Если инструментов нет, их ставит команда `xcode-select --install`.
+You need macOS 14 or later and the Command Line Tools. **Xcode is not required.** If the tools are missing, `xcode-select --install` installs them.
 
 ```bash
-git clone https://github.com/KirillKarmanov/MacOSRoute.git
-cd MacOSRoute
-scripts/make-signing-cert.sh   # один раз на Mac: сертификат для подписи
-scripts/build-spm.sh           # сборка → build/MacOSRoute.app
-cp -R build/MacOSRoute.app /Applications/
-open /Applications/MacOSRoute.app
+git clone https://github.com/KirillKarmanov/Tunnelside.git
+cd Tunnelside
+scripts/make-signing-cert.sh   # once per Mac: a code signing certificate
+scripts/build-spm.sh           # build → build/Tunnelside.app
+cp -R build/Tunnelside.app /Applications/
+open /Applications/Tunnelside.app
 ```
 
-При первом запуске откройте главное окно (значок в строке меню → «Открыть главное окно») и нажмите **«Установить фоновую службу»**. macOS один раз спросит пароль администратора.
+On first launch open the main window (menu bar icon → "Open Main Window") and click **"Install Background Service"**. macOS asks for the administrator password once.
 
-`make-signing-cert.sh` создаёт в связке ключей «Вход» бесплатный самоподписанный сертификат «MacOSRoute Local Signing» сроком на 10 лет. Платный аккаунт разработчика Apple не нужен. Если при сборке macOS спросит доступ к ключу, нажмите «Всегда разрешать».
+`make-signing-cert.sh` creates a free self-signed certificate "Tunnelside Local Signing" in the login keychain, valid for 10 years. No paid Apple Developer account is needed. If macOS asks for access to the key during the build, click "Always Allow".
 
-## Как пользоваться
+**Coming from MacOSRoute?** Installing the Tunnelside service stops and removes the MacOSRoute service and carries over its rules and routes. You can then delete MacOSRoute.app.
 
-**Добавить домен или адрес:** значок в строке меню → поле «Добавить IP / домен» → Enter. Или в главном окне, раздел «Правила»: там же можно указать заметку и группу.
+## Usage
 
-**Включить, выключить, удалить:** переключатель у правила в строке меню, либо правый клик по правилу в главном окне.
+**Add a domain or address:** menu bar icon → the "Add IP / domain" field → Return. Or in the main window, "Rules" section, where you can also set a note and a group.
 
-**Пример** — все сайты и серверы на одном хостинге проще закрыть подсетями, чем добавлять каждый адрес:
+**Turn on, off, remove:** the switch next to a rule in the menu bar, or right-click a rule in the main window.
+
+**Example** — all sites and servers of one hosting provider are easier to cover with subnets than address by address:
 
 ```
 87.232.64.0/24 93.125.99.0/24
 ```
 
-**Удалить:** «Настройки» → «Удалить…». Приложение уберёт все свои маршруты и фоновую службу.
+**Uninstall:** "Settings" → "Uninstall…". The app removes all its routes and the background service.
 
-## Безопасность
+## Security
 
-Маршруты меняет фоновая служба с правами root. Поэтому важно, кто может ей командовать:
+Routes are changed by a background service running as root, so it matters who can command it:
 
-- Служба принимает команды **только от приложения, подписанного тем же сертификатом, что и она сама**, — сверяется отпечаток сертификата. Программа, которая просто назовётся MacOSRoute, получит отказ. Служба, собранная без сертификата, отказывает всем.
-- Подключаться могут только пользователи из группы администраторов.
-- Правила шире `/8` (`0.0.0.0/0`, пары `/1` и т. п.) не принимают ни приложение, ни служба: одной такой строкой можно увести мимо VPN почти весь трафик.
-- Служба не выполняет произвольных команд: она только добавляет и удаляет маршруты через `/sbin/route`, аргументы передаются без оболочки.
-- Приложение и служба собираются с hardened runtime, так что подгрузить в них чужой код через `DYLD_INSERT_LIBRARIES` нельзя.
+- The service accepts commands **only from an app signed with the same certificate as the service itself** — it checks the certificate fingerprint. A program that merely calls itself Tunnelside is rejected. A service built without a certificate rejects everyone.
+- Only users in the admin group can connect.
+- Rules wider than `/8` (`0.0.0.0/0`, pairs of `/1` and so on) are refused by both the app and the service: one such line would send almost all traffic around the VPN.
+- The service runs no arbitrary commands: it only adds and removes routes via `/sbin/route`, with arguments passed without a shell.
+- The app and the service are built with the hardened runtime, so foreign code cannot be injected via `DYLD_INSERT_LIBRARIES`.
 
-**Что видно снаружи.** Запросы к DNS для доменов из правил идут открыто через вашу сеть: сначала к DNS-серверу сети, при недоступности — к 1.1.1.1, 8.8.8.8 или 9.9.9.9. Провайдер видит, какие домены вы пускаете мимо VPN. Телеметрии, аналитики и автообновлений в приложении нет.
+**What is visible from outside.** DNS queries for domains in your rules go in the clear through your network: first to the network's DNS server, then, if it fails, to 1.1.1.1, 8.8.8.8 or 9.9.9.9. Your provider can see which domains you send around the VPN. The app has no telemetry, analytics or auto-updates.
 
-## Ограничения
+## Limitations
 
-- Только IPv4.
-- Правило для домена направляет мимо VPN IP-адреса этого домена. Если сайт стоит за CDN (например, Cloudflare), на тех же адресах живут и чужие сайты — они тоже пойдут мимо VPN. Поддомены нужно добавлять отдельными правилами.
-- Если браузер получает от DNS через VPN другие адреса, чем служба через сеть, маршрут может не совпасть. На такой случай в «Настройках» можно переключить DNS на системный.
+- IPv4 only.
+- A domain rule sends the domain's IP addresses around the VPN. If a site sits behind a CDN (for example, Cloudflare), other sites share those addresses and will bypass the VPN too. Subdomains need their own rules.
+- If the browser gets different addresses from DNS through the VPN than the service gets through the network, the route may not match. For that case you can switch DNS to "System DNS" in Settings.
 
-## Где что лежит
+## Where things live
 
-| Что | Где |
+| What | Where |
 |---|---|
-| Правила и состояние | `/Library/Application Support/MacOSRoute/` |
-| Журнал службы | `/Library/Logs/MacOSRoute/helper.log` |
-| Служба | `/Library/PrivilegedHelperTools/com.hyperits.app.MacOSRoute.helper` |
-| Её запуск | `/Library/LaunchDaemons/com.hyperits.app.MacOSRoute.helper.plist` |
+| Rules and state | `/Library/Application Support/Tunnelside/` |
+| Service log | `/Library/Logs/Tunnelside/helper.log` |
+| Service | `/Library/PrivilegedHelperTools/io.github.kirillkarmanov.Tunnelside.helper` |
+| Its launchd job | `/Library/LaunchDaemons/io.github.kirillkarmanov.Tunnelside.helper.plist` |
 
-## Разработка
+## Development
 
 ```bash
-swift build                      # отладочная сборка
-swift test                       # тесты (Swift Testing, работает без Xcode)
-scripts/build-spm.sh             # готовый .app с подписью и самопроверкой защиты
-scripts/screenshots-spm.sh       # пересъёмка скриншотов для README
+swift build                      # debug build
+swift test                       # tests (Swift Testing, works without Xcode)
+scripts/build-spm.sh             # signed .app with a security self-check
+scripts/screenshots-spm.sh       # retake the README screenshots
 ```
 
-`scripts/build-spm.sh` в конце проверяет, что служба примет собранное приложение и отклонит подделку с тем же идентификатором. Если проверка не прошла, сборка завершается ошибкой.
+`scripts/build-spm.sh` finally checks that the service accepts the built app and rejects a fake with the same identifier. If the check fails, the build fails.
 
-`scripts/screenshots-spm.sh` запускает демо-службу от обычного пользователя в холостом режиме: системные маршруты не меняются. Правила для скриншотов лежат в `Design/Screenshots/demo-config.json`.
+`scripts/screenshots-spm.sh` starts a demo service as a regular user in dry-run mode: system routes are not changed. Demo rules are in `Design/Screenshots/demo-config.en.json` and `demo-config.ru.json`.
 
-При изменении кода службы или протокола между приложением и службой увеличьте `RouteConstants.helperVersion` — приложение предложит обновить установленную службу. Пересборка тем же сертификатом переустановки не требует: служба сверяет сертификат, а не хэш конкретной сборки.
+Interface texts are written in place as `L("English", "Русский")`; the service gets the language from the app along with its configuration.
 
-Файлы `MacOSRoute.xcodeproj`, `scripts/build-app.sh`, `scripts/release.sh` и `scripts/screenshots.sh` остались от оригинального проекта и требуют Xcode.
+When you change the service code or the app–service protocol, bump `RouteConstants.helperVersion` — the app will offer to update the installed service. Rebuilding with the same certificate needs no reinstall: the service checks the certificate, not the hash of a particular build.
 
-## Чем форк отличается от оригинала
+## Origin
 
-Основа — [castorworks/MacOSRoute](https://github.com/castorworks/MacOSRoute). Изменения:
+Tunnelside grew out of [MacOSRoute](https://github.com/castorworks/MacOSRoute) by Chongqing Hyperits Network Technology Co., Ltd. What changed:
 
-- сборка и тесты без Xcode (`Package.swift`, `scripts/build-spm.sh`);
-- при собственной подписи служба проверяет сертификат клиента; в оригинале без сертификата Apple Developer проверялось только имя приложения, которое может присвоить себе любая программа;
-- запрет правил шире `/8`;
-- запасные DNS 1.1.1.1, 8.8.8.8, 9.9.9.9 вместо 223.5.5.5 и 119.29.29.29;
-- интерфейс, журнал и комментарии в коде на русском.
+- build and tests without Xcode (`Package.swift`, `scripts/build-spm.sh`);
+- with self-signing, the service checks the client's certificate; the original, without an Apple Developer certificate, checked only the app identifier, which any program can claim;
+- rules wider than `/8` are refused;
+- fallback DNS 1.1.1.1, 8.8.8.8, 9.9.9.9 instead of 223.5.5.5 and 119.29.29.29;
+- English and Russian interface instead of Chinese.
 
-## Лицензия
+## License
 
-[MIT](LICENSE). © 2026 Chongqing Hyperits Network Technology Co., Ltd. — оригинальный проект; изменения форка — Kirill Karmanov.
+[MIT](LICENSE). © 2026 Kirill Karmanov; original MacOSRoute © 2026 Chongqing Hyperits Network Technology Co., Ltd.

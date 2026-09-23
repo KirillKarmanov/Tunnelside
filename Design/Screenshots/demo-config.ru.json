@@ -1,5 +1,6 @@
 {
   "revision" : 0,
+  "language" : "ru",
   "dnsMode" : "physical",
   "dnsRefreshMinutes" : 10,
   "dnsRetentionHours" : 6,

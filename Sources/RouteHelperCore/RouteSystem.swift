@@ -19,7 +19,7 @@ public struct NextHop: Codable, Equatable, Hashable, Sendable {
         switch (gateway, interface) {
         case let (g?, i?): return "\(g) (\(i))"
         case let (g?, nil): return g
-        case let (nil, i?): return "интерфейс \(i)"
+        case let (nil, i?): return L("interface \(i)", "интерфейс \(i)")
         default: return "—"
         }
     }
