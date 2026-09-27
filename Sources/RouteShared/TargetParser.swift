@@ -25,8 +25,8 @@ public enum TargetParser {
         guard !s.isEmpty else { return nil }
 
         // A full URL can be pasted: https://example.com:8443/path -> example.com
-        if s.contains("://"), let host = URLComponents(string: s)?.host {
-            s = host
+        if s.contains("://") {
+            s = URLComponents(string: s)?.host ?? hostFromURL(s)
         }
 
         if let slash = s.firstIndex(of: "/") {
@@ -44,8 +44,19 @@ public enum TargetParser {
         // Looks like an IP but is invalid (for example, 1.2.3.256) — don't treat it as a domain
         if s.allSatisfy({ $0.isNumber || $0 == "." }) { return nil }
 
-        let host = s.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        // Cyrillic and other national domains (промаркируем.бел) are routed by their Punycode name
+        let trimmed = s.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard let host = Punycode.asciiHost(trimmed) else { return nil }
         return isValidHostname(host) ? .domain(host) : nil
+    }
+
+    /// Host of a URL that URLComponents did not accept: scheme://user@host:port/path?query#fragment
+    private static func hostFromURL(_ url: String) -> String {
+        var rest = url[url.range(of: "://")!.upperBound...]
+        if let end = rest.firstIndex(where: { "/?#".contains($0) }) { rest = rest[..<end] }
+        if let at = rest.lastIndex(of: "@") { rest = rest[rest.index(after: at)...] }
+        if let colon = rest.lastIndex(of: ":") { rest = rest[..<colon] }
+        return String(rest)
     }
 
     /// Split user input into addresses by spaces, commas and semicolons

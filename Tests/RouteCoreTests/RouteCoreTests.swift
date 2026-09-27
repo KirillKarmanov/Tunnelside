@@ -34,6 +34,16 @@ final class TargetParserTests {
         XCTAssertNil(TargetParser.parse("-bad.com"))
     }
 
+    @Test func testInternationalDomains() {
+        XCTAssertEqual(TargetParser.parse("промаркируем.бел"), .domain("xn--80akihieihjdc0b.xn--90ais"))
+        XCTAssertEqual(TargetParser.parse("https://промаркируем.бел/"), .domain("xn--80akihieihjdc0b.xn--90ais"))
+        XCTAssertEqual(TargetParser.parse("https://Промаркируем.БЕЛ:8443/путь?x=1"), .domain("xn--80akihieihjdc0b.xn--90ais"))
+        XCTAssertEqual(TargetParser.parse("www.президент.рф"), .domain("www.xn--d1abbgf6aiiy.xn--p1ai"))
+        XCTAssertEqual(TargetParser.parse("bücher.example"), .domain("xn--bcher-kva.example"))
+        XCTAssertEqual(TargetParser.parse("xn--90ais"), .domain("xn--90ais"))
+        XCTAssertNil(TargetParser.parse("плохой домен.бел"))
+    }
+
     @Test func testSplitInput() {
         XCTAssertEqual(TargetParser.splitInput("a.com, 1.1.1.1\nb.com；c.com"), ["a.com", "1.1.1.1", "b.com", "c.com"])
     }

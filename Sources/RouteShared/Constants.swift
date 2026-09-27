@@ -10,7 +10,7 @@ public enum RouteConstants {
     public static let legacySupportDirectory = "/Library/Application Support/MacOSRoute"
 
     /// Bump after changing the service behavior — the app will offer to update the installed service.
-    public static let helperVersion = "1.3.0"
+    public static let helperVersion = "1.3.1"
 
     public static let helperInstallPath = "/Library/PrivilegedHelperTools/\(helperLabel)"
     public static let launchDaemonPlistPath = "/Library/LaunchDaemons/\(helperLabel).plist"
