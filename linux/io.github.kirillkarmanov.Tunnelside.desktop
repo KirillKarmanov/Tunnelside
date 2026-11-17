@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tunnelside
+Comment=Сайты и адреса мимо VPN
+Exec=/usr/bin/python3 /opt/tunnelside/tunnelside-gui.py
+Icon=/opt/tunnelside/icons/tunnelside-app.png
+Categories=Network;
+Keywords=VPN;WireGuard;route;исключения;
+StartupNotify=false
